@@ -1,0 +1,12 @@
+{
+	"name": "entry-worker",
+	"main": "./worker/index.ts",
+	"compatibility_date": "2026-10-23",
+	"vars": {
+		"LABEL": "first"
+	},
+	"services": [
+		{ "binding": "AUX", "service": "aux-worker" },
+		{ "binding": "AUX_RPC", "service": "aux-worker", "entrypoint": "AuxRpc" }
+	]
+}

@@ -1,0 +1,90 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only by default, jobs opt into more below
+permissions:
+  contents: read
+
+# A new push to a pull request cancels its earlier run; runs on main always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    name: Lint
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node --run lint
+      - run: node --run check-types
+      # Fails when .github/workflows/actions.lock is missing a dependency or a locked commit is rejected
+      - name: Verify actions lockfile
+        run: |
+          gh extension install github/gh-actions-lock --pin v0.2.0
+          gh actions-lock --verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows matters as much as Linux here: the plugin manages processes and paths that differ between them
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    name: Test (${{ matrix.os }})
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node --run test:unit
+
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    name: Release
+    needs: [lint, test]
+    # Never on pull requests or forks, only pushes to main of this repo
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Cherry/rspack-plugin-cloudflare'
+    environment: release
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    permissions:
+      contents: write # tags and GitHub releases
+      issues: write # semantic-release comments on released issues
+      pull-requests: write # and on released pull requests
+      id-token: write # npm trusted publishing, no npm token needed
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          # semantic-release reads the full history and tags to work out the next version
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Matches min-release-age in .npmrc
+    cooldown:
+      default-days: 7
+    groups:
+      # wrangler, miniflare and workers-types release together and need bumping as a set
+      cloudflare:
+        patterns:
+          - wrangler
+          - miniflare
+          - '@cloudflare/*'
+      rspack:
+        patterns:
+          - '@rspack/*'
+  # Keeps the actions and their pins in .github/workflows/actions.lock current
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

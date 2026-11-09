@@ -1,0 +1,39 @@
+{
+	"name": "fixture",
+	"main": "./worker/index.ts",
+	"compatibility_date": "2026-10-23",
+	"assets": {
+		"directory": "./build",
+		"binding": "ASSETS",
+		"run_worker_first": ["/*", "!/assets/*", "!/robots.txt"]
+	},
+	"vars": {
+		"GREETING": "hello"
+	},
+	"kv_namespaces": [
+		{ "binding": "KV", "id": "fixture-kv" }
+	],
+	"durable_objects": {
+		"bindings": [
+			{ "name": "COUNTER", "class_name": "Counter" }
+		]
+	},
+	"migrations": [
+		{ "tag": "v1", "new_sqlite_classes": ["Counter"] }
+	],
+	"env": {
+		"staging": {
+			"vars": {
+				"GREETING": "howdy"
+			},
+			"kv_namespaces": [
+				{ "binding": "KV", "id": "fixture-kv-staging" }
+			],
+			"durable_objects": {
+				"bindings": [
+					{ "name": "COUNTER", "class_name": "Counter" }
+				]
+			}
+		}
+	}
+}

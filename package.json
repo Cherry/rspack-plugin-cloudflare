@@ -1,0 +1,92 @@
+{
+	"name": "rspack-plugin-cloudflare",
+	"version": "0.0.0-semantically-released",
+	"description": "Develop and build Cloudflare Workers with rspack: runs your Worker in workerd with HMR, using your Wrangler config",
+	"keywords": [
+		"rspack",
+		"rspack-plugin",
+		"cloudflare",
+		"cloudflare-workers",
+		"workerd",
+		"wrangler",
+		"miniflare",
+		"hmr"
+	],
+	"homepage": "https://github.com/Cherry/rspack-plugin-cloudflare#readme",
+	"bugs": {
+		"url": "https://github.com/Cherry/rspack-plugin-cloudflare/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Cherry/rspack-plugin-cloudflare.git"
+	},
+	"license": "MIT",
+	"author": "James Ross <james@jross.me>",
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"runtime",
+		"src"
+	],
+	"scripts": {
+		"build": "rimraf dist && tsc -p tsconfig.build.json",
+		"check-types": "tsc -p tsconfig.json && tsc -p test/fixtures/basic/worker/tsconfig.json && tsc -p test/fixtures/legacy-compat/worker/tsconfig.json && tsc -p test/fixtures/multi-worker/tsconfig.json",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
+		"prepack": "node --run build",
+		"test": "node --run lint && node --run check-types && node --run test:unit",
+		"test:unit": "node --run build && vitest run"
+	},
+	"engines": {
+		"node": ">=24.10"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "5.20261102.1",
+		"@nodecraft/eslint-config": "54.0.0",
+		"@rspack/cli": "2.3.0",
+		"@rspack/core": "2.3.0",
+		"@rspack/dev-server": "2.2.2",
+		"@stylistic/eslint-plugin": "5.10.0",
+		"@types/node": "26.6.6",
+		"@types/ws": "8.18.2",
+		"eslint": "10.14.0",
+		"eslint-plugin-import-newlines": "2.0.0",
+		"eslint-plugin-import-x": "4.17.1",
+		"eslint-plugin-n": "18.5.0",
+		"eslint-plugin-regexp": "3.3.3",
+		"eslint-plugin-unicorn": "79.0.0",
+		"globals": "17.14.0",
+		"miniflare": "5.20261101.0-beta",
+		"rimraf": "6.1.3",
+		"semantic-release": "25.0.9",
+		"typescript": "6.0.3",
+		"typescript-eslint": "8.72.1",
+		"vitest": "5.0.5",
+		"wrangler": "4.156.1"
+	},
+	"dependencies": {
+		"@cloudflare/unenv-preset": "2.16.2",
+		"mrmime": "2.0.1",
+		"unenv": "2.0.0-rc.24",
+		"ws": "8.22.1"
+	},
+	"peerDependencies": {
+		"@rspack/core": "^2.0.0",
+		"@rspack/dev-server": "^2.0.0",
+		"wrangler": "^4.156.0"
+	},
+	"peerDependenciesMeta": {
+		"@rspack/dev-server": {
+			"optional": true
+		}
+	}
+}
