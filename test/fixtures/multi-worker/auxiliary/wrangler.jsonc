@@ -1,0 +1,5 @@
+{
+	"name": "aux-worker",
+	"main": "./index.ts",
+	"compatibility_date": "2026-10-23"
+}

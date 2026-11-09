@@ -1,0 +1,31 @@
+{
+	"compilerOptions": {
+		"target": "es2024",
+		"module": "nodenext",
+		"moduleResolution": "nodenext",
+		"lib": [
+			"es2024",
+			"dom"
+		],
+		"types": [
+			"node"
+		],
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"skipLibCheck": true,
+		"declaration": true,
+		"sourceMap": true,
+		"verbatimModuleSyntax": true,
+		"noEmit": true
+	},
+	"include": [
+		"src",
+		"test",
+		"*.ts",
+		"*.mts"
+	],
+	"exclude": [
+		"test/fixtures/*/worker",
+		"test/fixtures/multi-worker"
+	]
+}
