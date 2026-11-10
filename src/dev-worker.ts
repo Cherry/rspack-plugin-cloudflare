@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -68,6 +69,7 @@ export class DevWorker {
 	// the names the dev entry re-exports, which workerd bound when the Worker last (re)started
 	#exportNames: string[] = [];
 	#loadedModules = '';
+	#builtModules: { type: string; path: string; contents: Buffer; }[] = [];
 	#restartReason: string | undefined = 'it is starting';
 	#remoteProxy: RemoteProxySessionData = null;
 	// new on every (re)start so changed Dockerfiles get fresh image tags instead of reusing stale images
@@ -131,6 +133,13 @@ export class DevWorker {
 			modules.push({ type, path: path.join(this.#outputDir, fileName) });
 		}
 		return modules;
+	}
+
+	// read while the build callback runs, since the next build can start rewriting these files before Miniflare loads them
+	#readBuiltModules() {
+		return this.#getModules().map((module) => {
+			return { ...module, contents: readFileSync(module.path) };
+		});
 	}
 
 	/** Starts or refreshes the proxy for bindings marked `remote: true`, which wrangler only opens when some exist. */
@@ -208,6 +217,9 @@ export class DevWorker {
 		});
 		this.#watching = workerCompiler.watch({}, (error, stats) => {
 			if (this.#handleBuild(main, error, stats)) {
+				if (!this.buildError) {
+					this.#builtModules = this.#readBuiltModules();
+				}
 				this.building = false;
 				this.#events.onBuildDone(this).catch((loadError: unknown) => {
 					this.#logger.error(`Worker "${this.name}" failed to load: ${String(loadError)}`);
@@ -235,7 +247,8 @@ export class DevWorker {
 		const response = await mf.dispatchFetch('http://localhost/', {
 			headers: { [HMR_HEADER]: this.#hmrToken, [miniflare.CoreHeaders.ROUTE_OVERRIDE]: this.name },
 		});
-		const result: unknown = await response.json();
+		// a Worker that can't answer properly gets restarted rather than leaving dev broken
+		const result: unknown = await response.json().catch(() => {});
 		if (isPlainObject(result) && result.reload === false) {
 			return { reload: false };
 		}
@@ -294,7 +307,7 @@ export class DevWorker {
 				serviceBindings: { ...(options.serviceBindings as Record<string, unknown> | undefined), ...extraServiceBindings },
 				// rspack already bundled everything into one module, so module rules have nothing left to match
 				modulesRoot: this.#outputDir,
-				modules: this.#getModules(),
+				modules: this.#builtModules,
 				unsafeInspectorProxy: inspectorEnabled,
 			},
 		};
