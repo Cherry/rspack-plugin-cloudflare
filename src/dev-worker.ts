@@ -59,7 +59,7 @@ export class DevWorker {
 	readonly #options: CloudflarePluginOptions;
 	readonly #logger: Logger;
 	readonly #events: DevWorkerEvents;
-	readonly #resolve: () => ResolvedWorker;
+	readonly #resolve: () => Promise<ResolvedWorker>;
 	// proves an update request came from this session rather than a browser that happened to send the header
 	readonly #hmrToken = randomUUID();
 	#resolved: ResolvedWorker;
@@ -77,13 +77,13 @@ export class DevWorker {
 	buildError: string | undefined;
 	building = true;
 
-	constructor(options: { compiler: Compiler; resolve: () => ResolvedWorker; pluginOptions: CloudflarePluginOptions; logger: Logger; events: DevWorkerEvents; }) {
+	constructor(options: { compiler: Compiler; resolved: ResolvedWorker; resolve: () => Promise<ResolvedWorker>; pluginOptions: CloudflarePluginOptions; logger: Logger; events: DevWorkerEvents; }) {
 		this.#compiler = options.compiler;
 		this.#options = options.pluginOptions;
 		this.#logger = options.logger;
 		this.#events = options.events;
 		this.#resolve = options.resolve;
-		this.#resolved = options.resolve();
+		this.#resolved = options.resolved;
 	}
 
 	// on disk rather than in memory so workerd can read the bundle's source maps for stack traces
@@ -228,11 +228,13 @@ export class DevWorker {
 		});
 	}
 
-	/** Re-reads the Wrangler config and rebuilds from scratch, since anything from `main` to bindings may have changed. */
+	/** Re-reads the config and rebuilds from scratch, since anything from `main` to bindings may have changed. */
 	async reload() {
+		// read first, so a broken config leaves the current build running rather than stopping it
+		const resolved = await this.#resolve();
 		await this.#closeWatcher();
-		this.#resolved = this.#resolve();
-		this.#restartReason = 'its Wrangler config changed';
+		this.#resolved = resolved;
+		this.#restartReason = 'its config changed';
 		this.start();
 	}
 

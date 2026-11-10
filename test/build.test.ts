@@ -87,10 +87,10 @@ describe('rspack build with minify', () => {
 });
 
 describe('resolveWorker', () => {
-	it('applies the Wrangler environment named by CLOUDFLARE_ENV', () => {
+	it('applies the Wrangler environment named by CLOUDFLARE_ENV', async () => {
 		process.env.CLOUDFLARE_ENV = 'staging';
 		try {
-			const worker = resolveWorker(basicFixture, {});
+			const worker = await resolveWorker(basicFixture, {});
 			expect(worker.name).toBe('fixture-staging');
 			expect(worker.config.vars.GREETING).toBe('howdy');
 		} finally {
@@ -98,13 +98,13 @@ describe('resolveWorker', () => {
 		}
 	});
 
-	it('merges config overrides into nested objects instead of replacing them', () => {
-		const worker = resolveWorker(basicFixture, { config: { vars: { EXTRA: 'added' } } });
+	it('merges config overrides into nested objects instead of replacing them', async () => {
+		const worker = await resolveWorker(basicFixture, { config: { vars: { EXTRA: 'added' } } });
 		expect(worker.config.vars).toMatchObject({ GREETING: 'hello', EXTRA: 'added' });
 	});
 
-	it('lets a config function edit the loaded config in place', () => {
-		const worker = resolveWorker(basicFixture, {
+	it('lets a config function edit the loaded config in place', async () => {
+		const worker = await resolveWorker(basicFixture, {
 			config: (config) => {
 				config.compatibility_flags.push('nodejs_als');
 			},
@@ -128,7 +128,7 @@ describe('createOutputConfig', () => {
 				migrations: [{ tag: 'v1', new_sqlite_classes: ['App'] }],
 			}));
 
-			const config = createOutputConfig(resolveWorker(root, {}));
+			const config = createOutputConfig(await resolveWorker(root, {}));
 			expect(config.containers?.[0]?.image).toBe('../../containers/app/Dockerfile');
 			expect(config.containers?.[0]?.image_build_context).toBe('../../containers/app');
 		} finally {
@@ -136,7 +136,7 @@ describe('createOutputConfig', () => {
 		}
 	});
 
-	it('refuses an output directory inside the public assets directory', () => {
-		expect(() => resolveWorker(basicFixture, { outputDir: 'build/worker' })).toThrow(/publicly served/);
+	it('refuses an output directory inside the public assets directory', async () => {
+		await expect(resolveWorker(basicFixture, { outputDir: 'build/worker' })).rejects.toThrow(/publicly served/);
 	});
 });

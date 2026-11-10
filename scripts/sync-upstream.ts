@@ -28,6 +28,8 @@ run('git', ['-C', 'workers-sdk', 'fetch', '--depth', '1', 'origin', `refs/tags/$
 run('git', ['-C', 'workers-sdk', 'checkout', '--detach', tag]);
 
 const containersShared = readPackage('workers-sdk/packages/containers-shared/package.json');
+const config = readPackage('workers-sdk/packages/config/package.json');
+const workersUtils = readPackage('workers-sdk/packages/workers-utils/package.json');
 const workersShared = readPackage('workers-sdk/packages/workers-shared/package.json');
 run('npm', [
 	'install',
@@ -36,6 +38,9 @@ run('npm', [
 	`unenv@${wrangler.dependencies.unenv}`,
 	`@cloudflare/unenv-preset@${wrangler.dependencies['@cloudflare/unenv-preset']}`,
 	`@cloudflare/containers-shared@${containersShared.version}`,
+	// loads cloudflare.config.ts the way wrangler does, so it has to read the same config schema
+	`@cloudflare/config@${config.version}`,
+	`@cloudflare/workers-utils@${workersUtils.version}`,
 ]);
 // bundled into dist with workers-shared, so they stay on the versions workers-shared builds with
 const bundled = ['toucan-js', 'mime', 'ignore'].map(name => `${name}@${workersShared.devDependencies[name]}`);

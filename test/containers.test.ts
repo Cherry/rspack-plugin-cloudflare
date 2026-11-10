@@ -50,8 +50,8 @@ describe('getContainerOptions', () => {
 	});
 
 	// the image plan and wrangler's Durable Object options come from separate helpers, and only the shared build id ties them together
-	it('tags each image the way wrangler told its Durable Object to run it', () => {
-		const { config } = resolveWorker(root, {});
+	it('tags each image the way wrangler told its Durable Object to run it', async () => {
+		const { config } = await resolveWorker(root, {});
 		const { workerOptions } = unstable_getMiniflareWorkerOptions(config, undefined, { containerBuildId: 'build-id' });
 		const tags = getContainerOptions(config, 'build-id').map(option => option.image_tag);
 

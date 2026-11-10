@@ -7,7 +7,7 @@ export type WorkerConfig = Unstable_Config;
 export type WorkerConfigCustomizer = Partial<WorkerConfig> | ((config: WorkerConfig) => Partial<WorkerConfig> | void);
 
 export interface AuxiliaryWorkerOptions {
-	/** Wrangler config for the auxiliary Worker, relative to the rspack `context`. */
+	/** `cloudflare.config.ts` or Wrangler config for the auxiliary Worker, relative to the rspack `context`. */
 	configPath: string;
 	/** Changes the auxiliary Worker's config in code, applied after its config file loads. */
 	config?: WorkerConfigCustomizer;
@@ -23,7 +23,7 @@ export interface TunnelOptions {
 }
 
 export interface CloudflarePluginOptions {
-	/** Wrangler config file, relative to the rspack `context`. Defaults to the nearest wrangler.jsonc, wrangler.json or wrangler.toml at or above `context`. */
+	/** `cloudflare.config.ts` or Wrangler config file, relative to the rspack `context`. Defaults to the nearest one at or above `context`. */
 	configPath?: string;
 	/** Changes the Worker config in code, applied after the config file loads. */
 	config?: WorkerConfigCustomizer;

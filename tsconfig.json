@@ -28,6 +28,7 @@
 	"exclude": [
 		"test/fixtures/*/worker",
 		"test/fixtures/multi-worker",
+		"test/fixtures/cloudflare-config",
 		"src/workers"
 	]
 }

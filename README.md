@@ -4,7 +4,7 @@
 [![CI](https://github.com/Cherry/rspack-plugin-cloudflare/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Cherry/rspack-plugin-cloudflare/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/rspack-plugin-cloudflare)](./LICENSE)
 
-Run Cloudflare Workers in workerd while developing with `rspack serve`, with hot module replacement inside the Worker, and build them alongside the client with `rspack build`. It's the rspack counterpart to `@cloudflare/vite-plugin`, and it reads the same Wrangler config.
+Run Cloudflare Workers in workerd while developing with `rspack serve`, with hot module replacement inside the Worker, and build them alongside the client with `rspack build`. It's the rspack counterpart to `@cloudflare/vite-plugin`, and it reads the same Wrangler config or `cloudflare.config.ts`.
 
 > [!NOTE]
 > **Heads-up:** this project was primarily AI-authored. The plugin, its tests, and this README were written by AI coding agents in interactive sessions, with a human operator directing the work, reviewing output, and validating it against real rspack and Wrangler projects. Read the code before trusting it in production.
@@ -30,7 +30,7 @@ export default {
 };
 ```
 
-The Worker is configured in your existing `wrangler.toml` / `wrangler.json(c)`, found by walking up from rspack's `context`.
+The Worker is configured in your existing `wrangler.toml` / `wrangler.json(c)` or a [`cloudflare.config.ts`](#cloudflareconfigts), found by walking up from rspack's `context`.
 
 | Command | What happens |
 | --- | --- |
@@ -43,11 +43,42 @@ Set `CLOUDFLARE_ENV` to pick a Wrangler environment for dev and build, as with t
 
 `minify = true` in the Wrangler config minifies the Worker in `rspack build`, since `wrangler deploy` no longer bundles it. Dev stays unminified, and source maps are uploaded either way unless `upload_source_maps = false`.
 
+### cloudflare.config.ts
+
+The TypeScript config the Vite plugin uses works too, loaded with the same `@cloudflare/config` package wrangler uses for `--experimental-new-config`:
+
+```ts
+// cloudflare.config.ts
+import { bindings, defineConfig } from 'cf/config';
+import * as entrypoint from './worker/index.ts' with { type: 'cf-worker' };
+
+export default defineConfig({
+	worker: {
+		name: 'my-worker',
+		entrypoint,
+		compatibilityDate: '2026-10-23',
+		env: {
+			ASSETS: bindings.assets(),
+			KV: bindings.kv({ id: '<namespace id>' }),
+		},
+	},
+});
+```
+
+- It's converted into the same config a Wrangler file gives, so everything else in this README applies, and `rspack build` still writes a `wrangler.json` that a plain `wrangler deploy` reads.
+- `cloudflare.config.ts` doesn't name an assets directory, so it uses rspack's `output.path`, the same as Vite using its client build. Use the `config` option to point it somewhere else, for example `config: { assets: { directory: 'build' } }`.
+- `CLOUDFLARE_ENV` (or `environment`) becomes the config's `mode`, since it has no Wrangler environments.
+- Editing the config, or any local file it imports, rebuilds the Worker in dev.
+- A project with both `cloudflare.config.ts` and a Wrangler config next to each other is an error. Pick one with `configPath`.
+- `wrangler.config.ts` and generating types from the config aren't supported yet.
+
+`cloudflare.config.ts` and `cf/config` are still experimental upstream, so expect them to change with wrangler releases.
+
 ### Options
 
 | Option | Default | |
 | --- | --- | --- |
-| `configPath` | nearest wrangler config | Wrangler config, relative to `context` |
+| `configPath` | nearest config | `cloudflare.config.ts` or Wrangler config, relative to `context` |
 | `config` | | Overrides merged into the Wrangler config, or a function that edits it |
 | `environment` | `CLOUDFLARE_ENV` | Wrangler environment, like `--env` |
 | `auxiliaryWorkers` | | `[{ configPath, config?, outputDir? }]`, more Workers the entry Worker reaches through service bindings |
@@ -77,7 +108,7 @@ The dev bundle includes rspack's HMR runtime. After a rebuild, the plugin asks t
 
 - Changed modules and their importers re-evaluate in place. Other modules keep their state, and Durable Objects keep their storage.
 - Exports are wrapped so workerd's startup bindings (default handlers, Durable Objects, named entrypoints, Workflows) always call the current code.
-- The Worker restarts instead when its exports change, its `.wasm`/`.bin` modules change, its Wrangler config or local secrets change, or an update can't be applied.
+- The Worker restarts instead when its exports change, its `.wasm`/`.bin` modules change, its config or local secrets change, or an update can't be applied. A config that fails to load keeps the previous build serving until it's fixed.
 
 Uncaught errors come back as a page with a source-mapped stack, and Worker build errors show in the dev server's overlay.
 
