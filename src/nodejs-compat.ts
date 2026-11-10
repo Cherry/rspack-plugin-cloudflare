@@ -1,9 +1,9 @@
 import { fileURLToPath } from 'node:url';
 
 import { getCloudflarePreset } from '@cloudflare/unenv-preset';
+// from workers-utils rather than Miniflare, which comes from the user's wrangler and dropped this export in 5.20261103
+import { getNodeCompat } from '@cloudflare/workers-utils';
 import { defineEnv } from 'unenv';
-
-import { miniflare } from './miniflare.js';
 
 import type { ResolvedWorker } from './config.js';
 
@@ -45,7 +45,7 @@ function createInjectSource(inject: Record<string, string | readonly string[]>, 
  */
 export function getNodeJsCompat(worker: ResolvedWorker): NodeJsCompat | undefined {
 	const { compatibility_date: compatibilityDate, compatibility_flags: compatibilityFlags } = worker.config;
-	if (!miniflare.getNodeCompat(compatibilityDate, compatibilityFlags).isNodejsCompatEnabled) {
+	if (!getNodeCompat(compatibilityDate, compatibilityFlags).isNodejsCompatEnabled) {
 		return undefined;
 	}
 	const { env } = defineEnv({ presets: [getCloudflarePreset({ compatibilityDate, compatibilityFlags })] });
