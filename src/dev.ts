@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import * as miniflare from 'miniflare';
 import { unstable_convertConfigBindingsToStartWorkerBindings, unstable_printBindings } from 'wrangler';
 import { WebSocketServer } from 'ws';
 
@@ -27,6 +26,7 @@ import {
 	sendResponse,
 } from './http.js';
 import { DEBUG_PATH, getDebugPageHtml, resolveInspectorPort } from './inspector.js';
+import { miniflare } from './miniflare.js';
 
 import type { AssetRules, AssetWorkerOptions, ReadableFileSystem } from './assets.js';
 import type { ResolvedWorker } from './config.js';

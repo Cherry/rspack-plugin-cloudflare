@@ -62,11 +62,30 @@ jobs:
       - run: npm ci
       - run: node --run test:unit
 
+  # wrangler is a peer dependency, so users can run any version its range allows, not just the one the lockfile pins
+  test-oldest-wrangler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    name: Test (oldest wrangler)
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install the oldest wrangler the peer range allows
+        run: npm install --no-save "wrangler@$(node -p "require('./package.json').peerDependencies.wrangler.replace('^', '')")"
+      - run: node --run test:unit
+
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     name: Release
-    needs: [lint, test]
+    needs: [lint, test, test-oldest-wrangler]
     # Never on pull requests or forks, only pushes to main of this repo
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Cherry/rspack-plugin-cloudflare'
     environment: release

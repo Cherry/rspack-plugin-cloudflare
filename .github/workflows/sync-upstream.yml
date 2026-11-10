@@ -1,14 +1,15 @@
 name: Sync upstream
 on:
   schedule:
-    # Mondays, 06:23 UTC
-    - cron: '23 6 * * 1'
+    # Daily, 06:23 UTC. min-release-age in .npmrc still holds every release back for a week.
+    - cron: '23 6 * * *'
   workflow_dispatch:
     inputs:
       wrangler:
         description: The wrangler version to sync with
         default: latest
 
+# The job writes through the sync GitHub App's token, so GITHUB_TOKEN stays read-only
 permissions:
   contents: read
 
@@ -19,64 +20,66 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     name: Sync with wrangler
-    # Never on forks, which can't open pull requests here
+    # Never on forks, which have neither the App nor its key
     if: github.repository == 'Cherry/rspack-plugin-cloudflare'
-    permissions:
-      actions: write # approves CI on the pull request, which waits for approval when GITHUB_TOKEN opens it
-      contents: write # pushes the sync branch
-      pull-requests: write
-    env:
-      GH_TOKEN: ${{ github.token }}
+    # Holds the App's key, and only lets workflows running from main read it
+    environment: sync
     steps:
       - uses: actions/checkout@v7.0.1
         with:
+          persist-credentials: false
           submodules: true
       - uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
-      # Moves wrangler, Miniflare, the packages wrangler pins and the workers-sdk submodule to one release together
+      # Moves the tested wrangler, the packages it pins and the workers-sdk submodule to one release together. Install
+      # scripts stay off so no dependency code runs in the job that later holds the App's token; CI tests the pull request.
       - name: Sync
         id: sync
         run: node scripts/sync-upstream.ts "$WRANGLER"
         env:
           WRANGLER: ${{ inputs.wrangler || 'latest' }}
+          NPM_CONFIG_IGNORE_SCRIPTS: 'true'
       - name: Check for changes
         id: changes
-        run: |
-          if git diff --quiet; then
-            echo "Already synced with wrangler ${{ steps.sync.outputs.version }}."
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-      - if: steps.changes.outputs.changed
-        run: node --run test
-      - name: Open the pull request
-        if: steps.changes.outputs.changed
         env:
           VERSION: ${{ steps.sync.outputs.version }}
         run: |
+          if git diff --quiet; then
+            echo "Already synced with wrangler $VERSION."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      # A short-lived token scoped to this repository, so the pull request and its merge start CI and the release
+      - uses: actions/create-github-app-token@v3.3.0
+        if: steps.changes.outputs.changed
+        id: app-token
+        with:
+          client-id: ${{ vars.SYNC_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SYNC_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Open the pull request
+        if: steps.changes.outputs.changed
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          VERSION: ${{ steps.sync.outputs.version }}
+        run: |
           branch="sync/wrangler-$VERSION"
-          title="chore(deps): sync with wrangler $VERSION"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          title="fix(deps): sync with wrangler $VERSION"
+          # commits as the App's bot account, so they're attributed to it rather than to nobody
+          user_id="$(gh api "/users/${APP_SLUG}%5Bbot%5D" --jq .id)"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${user_id}+${APP_SLUG}[bot]@users.noreply.github.com"
           git switch -c "$branch"
           git commit --all --message "$title"
-          git push --force origin "$branch"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$branch"
           if ! gh pr view "$branch" > /dev/null 2>&1; then
             gh pr create --base main --head "$branch" --title "$title" \
-              --body "Moves wrangler, Miniflare, the packages wrangler pins and the workers-sdk submodule to wrangler $VERSION together. The sync job ran the full test suite on Ubuntu before opening this."
+              --body "Moves the wrangler we test against, the packages it pins and the workers-sdk submodule to wrangler $VERSION together. It merges itself once the required checks pass."
           fi
-          # Runs for pull requests that GITHUB_TOKEN pushes wait for approval
-          sha="$(git rev-parse HEAD)"
-          for _ in $(seq 30); do
-            runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$sha&status=action_required" --jq '.workflow_runs[].id')"
-            [[ -n "$runs" ]] && break
-            sleep 10
-          done
-          for run in $runs; do
-            gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$run/approve"
-          done
+          gh pr merge "$branch" --auto --squash

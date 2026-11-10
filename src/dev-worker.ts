@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import * as miniflare from 'miniflare';
 import { maybeStartOrUpdateRemoteProxySession, unstable_convertConfigBindingsToStartWorkerBindings, unstable_getMiniflareWorkerOptions } from 'wrangler';
 
 import { generateContainerBuildId, getContainerOptions } from './containers.js';
@@ -14,6 +13,7 @@ import {
 	createDevEntrySource,
 	getConfiguredExports,
 } from './dev-entry.js';
+import { miniflare } from './miniflare.js';
 import { IMPORTED_ASSETS_DIR, createWorkerConfig } from './worker-config.js';
 
 import type { AssetWorkerOptions } from './assets.js';
