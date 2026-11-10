@@ -105,18 +105,23 @@ export class DevWorker {
 			this.#exportNames = exportNames;
 			this.#restartReason ??= 'its exports changed';
 			this.#virtualModules?.writeModule(this.#entryPath, createDevEntrySource(main, exportNames));
-			// the watcher ignores .wrangler, where the virtual entry lives, so it won't notice the rewrite on its own
-			this.#watching?.invalidate();
+			this.#rebuildEntry();
 			return false;
 		}
 		const entryExports = getProvidedExports(stats, this.#entryPath)?.filter(name => name !== HMR_RUNNER_CLASS);
 		if (entryExports && entryExports.join(',') !== this.#exportNames.join(',')) {
-			// under load the rebuild can start before it sees the rewritten entry, and workerd would bind the stale exports
-			this.#watching?.invalidate();
+			// workerd binds whatever the built entry exports, so a build that missed the rewrite must not reach it
+			this.#rebuildEntry();
 			return false;
 		}
 		this.buildError = undefined;
 		return true;
+	}
+
+	// the watcher is paused while a build callback runs and can drop the virtual entry's change event, and a bare
+	// invalidate() then rebuilds with the old entry, so name the changed file outright
+	#rebuildEntry() {
+		this.#watching?.invalidateWithChangesAndRemovals(new Set([this.#entryPath]));
 	}
 
 	#getModules() {
