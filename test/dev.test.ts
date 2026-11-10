@@ -124,6 +124,12 @@ describe('rspack serve', () => {
 		expect(await server.getText('/api/scheduled')).toBe('* * * * *');
 	});
 
+	it('leaves rspack\'s lazy compilation endpoint to the dev server', async () => {
+		const response = await fetch(`${server.origin}/_rspack/lazy/trigger`, { method: 'POST', body: '' });
+		expect(response.status).toBe(200);
+		expect(await response.text()).toBe('\n');
+	});
+
 	it('links /__debug to DevTools for the Worker', async () => {
 		const page = await server.getText('/__debug');
 		expect(page).toContain('devtools.devprod.cloudflare.dev');
