@@ -84,6 +84,18 @@ describe('rspack build with minify', () => {
 		const deployConfig = JSON.parse(await fs.readFile(path.join(stagingDir, 'wrangler.json'), 'utf8')) as Record<string, unknown>;
 		expect(deployConfig).not.toHaveProperty('minify');
 	});
+
+	it('refuses to deploy the build to a different Wrangler environment', async () => {
+		const dryRun = (env: string) => run(wranglerBin, ['deploy', '--dry-run', '--env', env, '--outdir', path.join(basicFixture, '.wrangler/dry-run')], basicFixture);
+
+		const matching = await dryRun('staging');
+		expect(matching.code, matching.output).toBe(0);
+		expect(matching.output).toContain('fixture-staging');
+
+		const mismatched = await dryRun('production');
+		expect(mismatched.code).not.toBe(0);
+		expect(mismatched.output).toContain('does not match the target environment "staging"');
+	});
 });
 
 describe('resolveWorker', () => {
