@@ -10,13 +10,11 @@ import type { ResolvedWorker } from './config.js';
 import type { CloudflarePluginOptions } from './options.js';
 import type { Compiler, Stats } from '@rspack/core';
 
-// readConfig bookkeeping and bundling settings that rspack has already applied, so deploy must not apply them again
+// readConfig's file paths and bundling settings that rspack has already applied, so deploy must not apply them again. The
+// environment fields stay, since deploy checks --env against them and tags sibling environments with them
 const OMITTED_CONFIG_KEYS = new Set([
 	'configPath',
 	'userConfigPath',
-	'topLevelName',
-	'definedEnvironments',
-	'targetEnvironment',
 	'build',
 	'define',
 	'alias',
