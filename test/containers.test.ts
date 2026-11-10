@@ -12,9 +12,9 @@ import {
 import { unstable_getMiniflareWorkerOptions } from 'wrangler';
 
 import { resolveWorker } from '../src/config.js';
-import { getContainerImages } from '../src/containers.js';
+import { getContainerOptions } from '../src/containers.js';
 
-describe('getContainerImages', () => {
+describe('getContainerOptions', () => {
 	let root = '';
 
 	beforeAll(async () => {
@@ -49,21 +49,17 @@ describe('getContainerImages', () => {
 		await fs.rm(root, { recursive: true, force: true });
 	});
 
-	it('builds or pulls each image under the tag wrangler gave its Durable Object', () => {
+	// the image plan and wrangler's Durable Object options come from separate helpers, and only the shared build id ties them together
+	it('tags each image the way wrangler told its Durable Object to run it', () => {
 		const { config } = resolveWorker(root, {});
 		const { workerOptions } = unstable_getMiniflareWorkerOptions(config, undefined, { containerBuildId: 'build-id' });
-		const images = getContainerImages(config, workerOptions.durableObjects);
+		const tags = getContainerOptions(config, 'build-id').map(option => option.image_tag);
 
 		const durableObjects = workerOptions.durableObjects as Record<string, { container: { imageName?: string; images?: { image: string; }[]; }; }>;
-		const dockerfile = path.join(root, 'app', 'Dockerfile');
-		expect(images).toEqual([
-			{ tag: durableObjects.APP?.container.imageName, dockerfile, buildContext: path.join(root, 'app'), buildArgs: { MODE: 'dev' } },
-			{ tag: durableObjects.REMOTE?.container.imageName, uri: 'docker.io/library/nginx:1.27' },
-			{ tag: durableObjects.MULTI?.container.images?.[0]?.image, dockerfile, buildContext: path.join(root, 'app'), buildArgs: undefined },
-		]);
-		// every tag is unique to this build, so a restarted session never runs a stale image
-		for (const image of images) {
-			expect(image.tag).toContain('build-id');
-		}
+		expect(new Set(tags)).toEqual(new Set([
+			durableObjects.APP?.container.imageName,
+			durableObjects.REMOTE?.container.imageName,
+			durableObjects.MULTI?.container.images?.[0]?.image,
+		]));
 	});
 });

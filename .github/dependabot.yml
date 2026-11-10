@@ -7,13 +7,20 @@ updates:
     # Matches min-release-age in .npmrc
     cooldown:
       default-days: 7
+    # the Sync upstream workflow moves these with the workers-sdk submodule, since they must match the code bundled from it
+    ignore:
+      - dependency-name: wrangler
+      - dependency-name: miniflare
+      - dependency-name: unenv
+      - dependency-name: '@cloudflare/unenv-preset'
+      - dependency-name: '@cloudflare/containers-shared'
+      - dependency-name: toucan-js
+      - dependency-name: mime
+      - dependency-name: ignore
+      # typescript-eslint and @nodecraft/eslint-config don't support TypeScript 7 yet
+      - dependency-name: typescript
+        versions: ['>=7']
     groups:
-      # wrangler, miniflare and workers-types release together and need bumping as a set
-      cloudflare:
-        patterns:
-          - wrangler
-          - miniflare
-          - '@cloudflare/*'
       rspack:
         patterns:
           - '@rspack/*'

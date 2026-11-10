@@ -57,7 +57,7 @@ export default {
 				return new Response(await env.KV.get('key'));
 			}
 			case '/api/asset': {
-				const asset = await env.ASSETS.fetch(new URL('/robots.txt', request.url));
+				const asset = await env.ASSETS.fetch(new URL(url.searchParams.get('path') ?? '/robots.txt', request.url));
 				return new Response(await asset.text(), { status: asset.status });
 			}
 			case '/api/logo': {

@@ -21,6 +21,7 @@ export default [
 			'**/dist/**',
 			'**/build/**',
 			'**/.wrangler/**',
+			'workers-sdk/**',
 		],
 	},
 

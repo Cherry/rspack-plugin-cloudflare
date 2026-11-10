@@ -1,10 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import * as miniflare from 'miniflare';
 import { unstable_convertConfigBindingsToStartWorkerBindings, unstable_printBindings } from 'wrangler';
 import { WebSocketServer } from 'ws';
 
-import { createAssetServer } from './assets.js';
+import {
+	ASSET_WORKER_NAME,
+	DevAssets,
+	ROUTER_WORKER_NAME,
+	getAssetConfig,
+	getAssetWorkers,
+} from './assets.js';
 import {
 	getContainerEngine,
 	getDockerPath,
@@ -20,13 +27,11 @@ import {
 	sendResponse,
 } from './http.js';
 import { DEBUG_PATH, getDebugPageHtml, resolveInspectorPort } from './inspector.js';
-import { miniflare } from './miniflare.js';
-import { parseStaticRouting, routeRequest } from './routing.js';
 
-import type { AssetServer, ReadableFileSystem } from './assets.js';
+import type { AssetRules, AssetWorkerOptions, ReadableFileSystem } from './assets.js';
 import type { ResolvedWorker } from './config.js';
-import type { ContainerImage } from './containers.js';
-import type { CloudflarePluginOptions } from './options.js';
+import type { CloudflarePluginOptions, WorkerConfig } from './options.js';
+import type { ContainerDevOptions } from '@cloudflare/containers-shared';
 import type { Compiler } from '@rspack/core';
 import type { FSWatcher } from 'node:fs';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
@@ -41,9 +46,10 @@ interface DevServerHooks {
 	sendToClients: (type: string, data?: unknown) => void;
 }
 
-// paths the dev server answers itself, before anything reaches the Worker or the assets directory
+const PLUGIN_NAME = 'rspack-plugin-cloudflare';
+// paths the dev server answers itself, before anything reaches the Workers
 const DEV_SERVER_PATH_RE = /^\/(?:webpack-dev-server|__webpack_dev_server__|__open-in-editor|lazy-compilation-using-)/;
-// Miniflare's own endpoints, like trigger handlers, which skip asset routing
+// Miniflare's own endpoints, like trigger handlers, which belong to the Worker rather than the asset router
 const MINIFLARE_PATH_RE = /^\/(?:cdn-cgi\/local|__cf_local)\//;
 // pre-v5 Miniflare paths still in docs and scripts, mapped the same way the Vite plugin does
 const LEGACY_PATH_REWRITES = [
@@ -73,8 +79,7 @@ export class DevSession {
 	readonly #workers: DevWorker[];
 	readonly #entry: DevWorker;
 	#hooks: DevServerHooks | undefined;
-	#assets: AssetServer | undefined;
-	#routing;
+	#assets: DevAssets | undefined;
 	#miniflare: InstanceType<typeof miniflare.Miniflare> | undefined;
 	#inspectorPort: number | undefined;
 	#configWatchers: FSWatcher[] = [];
@@ -88,6 +93,8 @@ export class DevSession {
 	#loading = Promise.resolve();
 	// open while any Worker is building, so requests wait for the code they'd otherwise miss
 	#gate: { promise: Promise<void>; release: () => void; } | undefined;
+	// the `_headers` and `_redirects` Miniflare last started the asset Worker with
+	#assetRules: AssetRules | undefined;
 
 	constructor(options: { compiler: Compiler; resolvers: (() => ResolvedWorker)[]; pluginOptions: CloudflarePluginOptions; logger: Logger; }) {
 		this.#compiler = options.compiler;
@@ -111,7 +118,6 @@ export class DevSession {
 			throw new Error('A dev session needs at least one Worker.');
 		}
 		this.#entry = entry;
-		this.#routing = parseStaticRouting(entry.resolved.config.assets?.run_worker_first);
 		this.#openGate();
 	}
 
@@ -236,55 +242,85 @@ export class DevSession {
 
 	#assetsServiceBinding(): Record<string, unknown> {
 		const binding = this.#entry.resolved.assets?.binding;
-		const assets = this.#assets;
-		if (!binding || !assets) {
+		if (!binding || !this.#assets) {
 			return {};
 		}
-		return {
-			[binding]: {
-				node: (req: IncomingMessage, res: ServerResponse) => {
-					assets.handle(req, res).catch((error: unknown) => this.#sendError(res, error));
-				},
-			},
-		};
+		return { [binding]: ASSET_WORKER_NAME };
 	}
 
 	/** Builds images not seen yet this session, returning the engine Miniflare should start containers with. */
-	async #prepareContainers(images: ContainerImage[]) {
-		if (images.length === 0) {
+	async #prepareContainers(workers: { config: WorkerConfig; containerOptions: ContainerDevOptions[]; }[]) {
+		const withContainers = workers.filter(worker => worker.containerOptions.length > 0);
+		const [first] = withContainers;
+		if (!first) {
 			return;
 		}
 		const dockerPath = getDockerPath();
-		const pending = images.filter(image => !this.#containerTags.has(image.tag));
-		if (pending.length > 0) {
+		const pending = withContainers.map(({ config, containerOptions }) => {
+			return { config, containerOptions: containerOptions.filter(options => !this.#containerTags.has(options.image_tag)) };
+		});
+		if (pending.some(worker => worker.containerOptions.length > 0)) {
 			this.#logger.info('Building container images for local development...');
-			await prepareContainerImages(dockerPath, pending);
-			for (const image of pending) {
-				this.#containerTags.add(image.tag);
+			for (const { config, containerOptions } of pending) {
+				await prepareContainerImages({ config, dockerPath, containerOptions, logger: this.#logger });
+				for (const options of containerOptions) {
+					this.#containerTags.add(options.image_tag);
+				}
 			}
 			// rspack serve may exit without a shutdown hook, like on a crash, and containers would keep running
 			process.off('exit', this.#removeContainersOnExit);
 			process.on('exit', this.#removeContainersOnExit);
 			this.#logger.info('Container images built; restart dev to rebuild them after changing a Dockerfile.');
 		}
-		return getContainerEngine(dockerPath);
+		return getContainerEngine(first.config, dockerPath);
+	}
+
+	async #getAssetWorkers(assetWorkerOptions: AssetWorkerOptions | undefined) {
+		const assets = this.#assets;
+		if (!assetWorkerOptions || !assets) {
+			return [];
+		}
+		this.#assetRules = await assets.readRules();
+		return getAssetWorkers({
+			routerConfig: assetWorkerOptions.routerConfig,
+			assetConfig: getAssetConfig(assetWorkerOptions, this.#assetRules, this.#logger),
+			userWorkerName: this.#entry.resolved.main ? this.#entry.name : undefined,
+			assets,
+		});
+	}
+
+	/** Restarts the Workers when the build's `_headers` or `_redirects` change, since the asset Worker reads them at startup. */
+	async #checkAssetRules() {
+		const previous = this.#assetRules;
+		if (!this.#miniflare || !this.#assets || !previous) {
+			return;
+		}
+		const current = await this.#assets.readRules();
+		if (current.headers !== previous.headers || current.redirects !== previous.redirects) {
+			await this.#restart('Workers restarted: _headers or _redirects changed');
+		}
 	}
 
 	async #getMiniflareOptions() {
 		const workers: unknown[] = [];
 		const externalWorkers: unknown[] = [];
-		const containerImages: ContainerImage[] = [];
+		const containers: { config: WorkerConfig; containerOptions: ContainerDevOptions[]; }[] = [];
+		let assetWorkerOptions: AssetWorkerOptions | undefined;
 		for (const worker of this.#workers) {
+			const extraBindings = worker === this.#entry ? this.#assetsServiceBinding() : {};
+			const options = await worker.getMiniflareOptions(extraBindings, this.#inspectorPort !== undefined);
+			if (worker === this.#entry) {
+				assetWorkerOptions = options.assetWorkerOptions;
+			}
 			if (!worker.resolved.main) {
 				continue;
 			}
-			const extraBindings = worker === this.#entry ? this.#assetsServiceBinding() : {};
-			const options = await worker.getMiniflareOptions(extraBindings, this.#inspectorPort !== undefined);
 			workers.push(options.worker);
 			externalWorkers.push(...options.externalWorkers);
-			containerImages.push(...options.containerImages);
+			containers.push({ config: worker.resolved.config, containerOptions: options.containerOptions });
 		}
-		const containerEngine = await this.#prepareContainers(containerImages);
+		const containerEngine = await this.#prepareContainers(containers);
+		const assetWorkers = await this.#getAssetWorkers(assetWorkerOptions);
 
 		const { rootDir } = this.#entry.resolved;
 		const { persistState = true } = this.#options;
@@ -305,24 +341,23 @@ export class DevSession {
 			// serves /cdn-cgi/local/scheduled and friends for testing non-fetch handlers
 			unsafeTriggerHandlers: true,
 			unsafeModuleFallbackService: (request: Parameters<typeof miniflare.parseModuleFallbackRequest>[0]) => this.#serveHotUpdate(request),
-			// the entry Worker comes first, which makes it the one requests reach
-			workers: [...workers, ...externalWorkers],
+			// the first Worker gets requests without a route override: the entry Worker, or the router for an assets-only project
+			workers: [...workers, ...assetWorkers, ...externalWorkers],
 		} as Parameters<typeof miniflare.convertV4MiniflareOptions>[0]);
 	}
 
-	#createAssetServer() {
-		const { assets, config } = this.#entry.resolved;
+	#createDevAssets() {
+		const { assets } = this.#entry.resolved;
 		const hooks = this.#hooks;
 		if (!assets || !hooks) {
 			return;
 		}
-		return createAssetServer({
+		return new DevAssets({
 			directory: assets.directory,
-			config: config.assets,
-			// the dev server replaces the client compiler's output filesystem with an in-memory one
-			getOutputFileSystem: () => this.#compiler.outputFileSystem as ReadableFileSystem | null ?? undefined,
 			// assets imported by Worker code, which `rspack build` copies into the assets directory
 			extraDirectories: [this.#entry.importedAssetsDir],
+			// the dev server replaces the client compiler's output filesystem with an in-memory one
+			getOutputFileSystem: () => this.#compiler.outputFileSystem as ReadableFileSystem | null ?? undefined,
 			waitUntilValid: hooks.waitUntilValid,
 		});
 	}
@@ -361,8 +396,7 @@ export class DevSession {
 		this.#openGate();
 		await worker.reload();
 		if (worker === this.#entry) {
-			this.#routing = parseStaticRouting(worker.resolved.config.assets?.run_worker_first);
-			this.#assets = this.#createAssetServer();
+			this.#assets = this.#createDevAssets();
 		}
 	}
 
@@ -397,20 +431,29 @@ export class DevSession {
 			worker.start();
 		}
 		this.#watchConfigs();
-		// an assets-only project has nothing to build
+		if (this.#workers.every(worker => !worker.building)) {
+			// an assets-only project has nothing to build, so the router and asset Workers can start straight away
+			this.#loading = this.#loading.then(() => this.#load());
+			await this.#loading;
+		}
 		this.#releaseGateIfIdle();
 	}
 
 	start(hooks: DevServerHooks) {
 		this.#hooks = hooks;
-		this.#assets = this.#createAssetServer();
+		this.#assets = this.#createDevAssets();
+		this.#compiler.hooks.done.tap(PLUGIN_NAME, () => {
+			this.#loading = this.#loading.then(() => this.#checkAssetRules()).catch((error: unknown) => {
+				this.#logger.error(`Workers failed to pick up _headers or _redirects:\n${String(error)}`);
+			});
+		});
 		this.#start().catch((error: unknown) => {
 			this.#logger.error(`Workers failed to start:\n${String(error)}`);
 			this.#gate?.release();
 		});
 	}
 
-	/** Connect middleware that routes each request to the Worker or the assets directory, like Cloudflare's router does. */
+	/** Connect middleware that sends each request through Cloudflare's router Worker, or straight to the Worker without assets. */
 	async handle(req: IncomingMessage, res: ServerResponse, next: () => void) {
 		const url = getRequestUrl(req);
 		if (DEV_SERVER_PATH_RE.test(url.pathname)) {
@@ -423,15 +466,7 @@ export class DevSession {
 			return;
 		}
 		try {
-			const hasWorker = this.#entry.resolved.main !== undefined;
 			url.pathname = rewriteLegacyMiniflarePath(url.pathname);
-			const route = MINIFLARE_PATH_RE.test(url.pathname) ? 'worker' : routeRequest(this.#routing, url.pathname, Boolean(this.#assets));
-			const assets = this.#assets;
-			const servesAsset = !hasWorker || route === 'asset' || (route === 'asset-then-worker' && await assets?.exists(url.pathname));
-			if (assets && servesAsset) {
-				await assets.handle(req, res);
-				return;
-			}
 			const mf = await this.#ready();
 			if (!mf) {
 				// already logged when the build failed, so only the browser needs telling
@@ -439,7 +474,11 @@ export class DevSession {
 				sendErrorPage(res, `Workers failed to start:\n${errors.join('\n\n')}`);
 				return;
 			}
-			const response = await mf.dispatchFetch(url, createRequestInit(req, res));
+			const init = createRequestInit(req, res);
+			if (this.#assets && !MINIFLARE_PATH_RE.test(url.pathname)) {
+				init.headers.push([miniflare.CoreHeaders.ROUTE_OVERRIDE, ROUTER_WORKER_NAME]);
+			}
+			const response = await mf.dispatchFetch(url, init);
 			sendResponse(res, response);
 		} catch (error) {
 			this.#sendError(res, error);
@@ -454,7 +493,7 @@ export class DevSession {
 		const webSocketServer = new WebSocketServer({ noServer: true });
 		server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
 			const url = getRequestUrl(req);
-			if (url.pathname === devServerSocketPath || routeRequest(this.#routing, url.pathname, Boolean(this.#assets)) === 'asset') {
+			if (url.pathname === devServerSocketPath) {
 				return;
 			}
 			socket.on('error', () => socket.destroy());

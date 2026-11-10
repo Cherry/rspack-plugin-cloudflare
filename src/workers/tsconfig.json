@@ -1,0 +1,15 @@
+{
+	"compilerOptions": {
+		"target": "es2024",
+		"lib": ["es2024"],
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"types": ["@cloudflare/workers-types/experimental"],
+		"strict": true,
+		"noImplicitOverride": true,
+		"noEmit": true,
+		"isolatedModules": true,
+		"skipLibCheck": true
+	},
+	"include": ["./**/*.ts"]
+}

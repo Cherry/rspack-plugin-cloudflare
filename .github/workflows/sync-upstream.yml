@@ -1,0 +1,82 @@
+name: Sync upstream
+on:
+  schedule:
+    # Mondays, 06:23 UTC
+    - cron: '23 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      wrangler:
+        description: The wrangler version to sync with
+        default: latest
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    name: Sync with wrangler
+    # Never on forks, which can't open pull requests here
+    if: github.repository == 'Cherry/rspack-plugin-cloudflare'
+    permissions:
+      actions: write # approves CI on the pull request, which waits for approval when GITHUB_TOKEN opens it
+      contents: write # pushes the sync branch
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          submodules: true
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Moves wrangler, Miniflare, the packages wrangler pins and the workers-sdk submodule to one release together
+      - name: Sync
+        id: sync
+        run: node scripts/sync-upstream.ts "$WRANGLER"
+        env:
+          WRANGLER: ${{ inputs.wrangler || 'latest' }}
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "Already synced with wrangler ${{ steps.sync.outputs.version }}."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.changes.outputs.changed
+        run: node --run test
+      - name: Open the pull request
+        if: steps.changes.outputs.changed
+        env:
+          VERSION: ${{ steps.sync.outputs.version }}
+        run: |
+          branch="sync/wrangler-$VERSION"
+          title="chore(deps): sync with wrangler $VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit --all --message "$title"
+          git push --force origin "$branch"
+          if ! gh pr view "$branch" > /dev/null 2>&1; then
+            gh pr create --base main --head "$branch" --title "$title" \
+              --body "Moves wrangler, Miniflare, the packages wrangler pins and the workers-sdk submodule to wrangler $VERSION together. The sync job ran the full test suite on Ubuntu before opening this."
+          fi
+          # Runs for pull requests that GITHUB_TOKEN pushes wait for approval
+          sha="$(git rev-parse HEAD)"
+          for _ in $(seq 30); do
+            runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$sha&status=action_required" --jq '.workflow_runs[].id')"
+            [[ -n "$runs" ]] && break
+            sleep 10
+          done
+          for run in $runs; do
+            gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$run/approve"
+          done

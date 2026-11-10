@@ -1,9 +1,8 @@
 import { fileURLToPath } from 'node:url';
 
 import { getCloudflarePreset } from '@cloudflare/unenv-preset';
+import * as miniflare from 'miniflare';
 import { defineEnv } from 'unenv';
-
-import { miniflare } from './miniflare.js';
 
 import type { ResolvedWorker } from './config.js';
 

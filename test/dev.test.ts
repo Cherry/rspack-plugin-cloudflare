@@ -63,6 +63,22 @@ describe('rspack serve', () => {
 		expect(await response.text()).toContain('hot/dev-server');
 	});
 
+	it('applies _headers and _redirects from the build, like the deployed asset Worker', async () => {
+		const robots = await fetch(`${server.origin}/robots.txt`);
+		expect(robots.headers.get('x-fixture')).toBe('from-headers');
+		// dev files keep their names across rebuilds, so nothing may tell the browser to reuse them
+		expect(robots.headers.get('etag')).toBeNull();
+
+		const redirect = await fetch(`${server.origin}/assets/old.js`, { redirect: 'manual' });
+		expect(redirect.status).toBe(301);
+		expect(redirect.headers.get('location')).toBe('/assets/main.js');
+	});
+
+	it('never serves the rules files themselves, since Cloudflare doesn\'t upload them', async () => {
+		const response = await fetch(`${server.origin}/api/asset?path=/_headers`);
+		expect(response.status).toBe(404);
+	});
+
 	it('gives the Worker an ASSETS binding backed by the dev build', async () => {
 		expect(await server.getText('/api/asset')).toContain('User-agent');
 	});
@@ -161,6 +177,22 @@ describe('rspack serve', () => {
 			expect(await server.getJson('/api/hello')).toMatchObject({ message: 'hello from the worker' });
 		} finally {
 			socket.close();
+		}
+	});
+
+	it('picks up _headers edits, which the asset Worker only reads when it starts', async () => {
+		const headersPath = path.join(basicFixture, 'public/_headers');
+		const originalHeaders = await fs.readFile(headersPath, 'utf8');
+		try {
+			await fs.writeFile(headersPath, originalHeaders.replace('from-headers', 'edited-headers'));
+			const value = await waitFor(async () => {
+				const response = await fetch(`${server.origin}/robots.txt`);
+				const header = response.headers.get('x-fixture');
+				return header === 'edited-headers' ? header : undefined;
+			});
+			expect(value).toBe('edited-headers');
+		} finally {
+			await fs.writeFile(headersPath, originalHeaders);
 		}
 	});
 });

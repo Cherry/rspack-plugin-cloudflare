@@ -23,6 +23,8 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+          # workers-shared, bundled into dist, comes from the pinned workers-sdk submodule
+          submodules: true
       - uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
@@ -51,6 +53,8 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+          # workers-shared, bundled into dist, comes from the pinned workers-sdk submodule
+          submodules: true
       - uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
@@ -80,6 +84,8 @@ jobs:
           # semantic-release reads the full history and tags to work out the next version
           fetch-depth: 0
           persist-credentials: false
+          # workers-shared, bundled into dist, comes from the pinned workers-sdk submodule
+          submodules: true
       - uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
