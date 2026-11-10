@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { unstable_convertConfigBindingsToStartWorkerBindings, unstable_printBindings } from 'wrangler';
+import { convertConfigToBindings, printBindings } from '@cloudflare/workers-utils';
 import { WebSocketServer } from 'ws';
 
 import {
@@ -233,7 +233,7 @@ export class DevSession {
 	#printReady() {
 		for (const worker of this.#workers) {
 			const { config, name } = worker.resolved;
-			unstable_printBindings(unstable_convertConfigBindingsToStartWorkerBindings(config), {
+			printBindings(convertConfigToBindings(config, { usePreviewIds: true }), {
 				name,
 				local: true,
 				warnIfNoBindings: false,
