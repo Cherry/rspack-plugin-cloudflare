@@ -2,8 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import * as miniflare from 'miniflare';
-
+import { miniflare } from './miniflare.js';
 import { constructHeaders, constructRedirects } from '../workers-sdk/packages/workers-shared/utils/configuration/constructConfiguration.js';
 import { parseHeaders } from '../workers-sdk/packages/workers-shared/utils/configuration/parseHeaders.js';
 import { parseRedirects } from '../workers-sdk/packages/workers-shared/utils/configuration/parseRedirects.js';

@@ -15,7 +15,7 @@ Run Cloudflare Workers in workerd while developing with `rspack serve`, with hot
 npm install --save-dev rspack-plugin-cloudflare @rspack/core @rspack/cli @rspack/dev-server wrangler
 ```
 
-Requires Node.js 24.10 or later.
+Requires Node.js 24.10 or later. `wrangler` is a peer dependency, so you pick its version: the plugin runs your Worker with the Miniflare and workerd that your wrangler ships, and newer compatibility dates arrive when you update wrangler.
 
 ## Usage
 
@@ -156,7 +156,7 @@ node --run test
 
 `node --run test` lints, type checks, builds and runs the test suite, which starts real `rspack serve` and `rspack build` runs against the fixtures in `test/fixtures`.
 
-Cloudflare's router and asset Workers and their `_headers` and `_redirects` parsers come from `@cloudflare/workers-shared`, which isn't published. The `workers-sdk` submodule is pinned to the commit of the wrangler release we depend on, and `node --run build` bundles that code into `dist`. The weekly Sync upstream workflow moves wrangler, Miniflare, the packages wrangler pins and the submodule to the latest wrangler release together, runs the tests and opens a pull request. To do the same locally, run `node scripts/sync-upstream.ts [version]`.
+Cloudflare's router and asset Workers and their `_headers` and `_redirects` parsers come from `@cloudflare/workers-shared`, which isn't published. The `workers-sdk` submodule is pinned to the commit of the wrangler release we test against, and `node --run build` bundles that code into `dist`. The daily Sync upstream workflow moves that wrangler, the packages it pins and the submodule to the latest wrangler release together and opens a pull request, which merges and releases itself once CI passes. CI also tests the oldest wrangler the peer range allows. To do the same locally, run `node scripts/sync-upstream.ts [version]`.
 
 Releases are automated. Merging to `main` runs [semantic-release](https://github.com/semantic-release/semantic-release), which picks the version from the [conventional commit](https://www.conventionalcommits.org/) titles since the last release and publishes to npm through trusted publishing, with provenance. Pull requests are squash merged, so the pull request title is the commit that counts.
 

@@ -1,5 +1,5 @@
-// Moves wrangler, the packages it pins, and the workers-sdk submodule to one wrangler release, so the code bundled from
-// workers-sdk always matches the Miniflare that runs it. Usage: node scripts/sync-upstream.ts [wrangler version or tag]
+// Moves the wrangler we test against, the packages it pins, and the workers-sdk submodule to one wrangler release, so the
+// code bundled from workers-sdk stays current. Usage: node scripts/sync-upstream.ts [wrangler version or tag]
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 
@@ -20,7 +20,8 @@ function readPackage(file: string) {
 
 const target = process.argv[2] ?? 'latest';
 // npm honours min-release-age in .npmrc, so this never picks a release younger than the rest of the dependencies may be
-run('npm', ['install', '--save-exact', `wrangler@${target}`]);
+// wrangler is a peer dependency, so this only moves the version tests run against, not the range users can install
+run('npm', ['install', '--save-exact', '--save-dev', `wrangler@${target}`]);
 const wrangler = readPackage('node_modules/wrangler/package.json');
 
 const tag = `wrangler@${wrangler.version}`;
@@ -34,7 +35,6 @@ const workersShared = readPackage('workers-sdk/packages/workers-shared/package.j
 run('npm', [
 	'install',
 	'--save-exact',
-	`miniflare@${wrangler.dependencies.miniflare}`,
 	`unenv@${wrangler.dependencies.unenv}`,
 	`@cloudflare/unenv-preset@${wrangler.dependencies['@cloudflare/unenv-preset']}`,
 	`@cloudflare/containers-shared@${containersShared.version}`,
@@ -44,7 +44,8 @@ run('npm', [
 ]);
 // bundled into dist with workers-shared, so they stay on the versions workers-shared builds with
 const bundled = ['toucan-js', 'mime', 'ignore'].map(name => `${name}@${workersShared.devDependencies[name]}`);
-run('npm', ['install', '--save-exact', '--save-dev', ...bundled]);
+// Miniflare is only here for its types, since at runtime it loads through the user's wrangler
+run('npm', ['install', '--save-exact', '--save-dev', `miniflare@${wrangler.dependencies.miniflare}`, ...bundled]);
 
 if (process.env.GITHUB_OUTPUT) {
 	fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${wrangler.version}\n`);
