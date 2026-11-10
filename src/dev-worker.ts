@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { maybeStartOrUpdateRemoteProxySession, unstable_convertConfigBindingsToStartWorkerBindings, unstable_getMiniflareWorkerOptions } from 'wrangler';
+import { convertConfigToBindings } from '@cloudflare/workers-utils';
+import { maybeStartOrUpdateRemoteProxySession, unstable_getMiniflareWorkerOptions } from 'wrangler';
 
 import { generateContainerBuildId, getContainerOptions } from './containers.js';
 import {
@@ -150,7 +151,7 @@ export class DevWorker {
 		const { config } = this.#resolved;
 		this.#remoteProxy = await maybeStartOrUpdateRemoteProxySession({
 			name: config.name,
-			bindings: unstable_convertConfigBindingsToStartWorkerBindings(config) ?? {},
+			bindings: convertConfigToBindings(config, { usePreviewIds: true }),
 			account_id: config.account_id,
 			complianceRegion: config.compliance_region,
 		}, this.#remoteProxy);
