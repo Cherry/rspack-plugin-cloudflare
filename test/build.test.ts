@@ -66,6 +66,26 @@ describe('rspack build', () => {
 	});
 });
 
+describe('rspack build with minify', () => {
+	const stagingDir = path.join(basicFixture, 'dist/fixture-staging');
+
+	beforeAll(async () => {
+		const result = await run(rspackBin, ['build'], basicFixture, { CLOUDFLARE_ENV: 'staging' });
+		expect(result.code, result.output).toBe(0);
+	});
+
+	it('minifies the Worker, since wrangler deploy cannot minify a Worker it no longer bundles', async () => {
+		const minified = await fs.readFile(path.join(stagingDir, 'index.js'), 'utf8');
+		const unminified = await fs.readFile(path.join(outputDir, 'index.js'), 'utf8');
+		expect(minified).toContain('from the worker');
+		expect(minified.length).toBeLessThan(unminified.length * 0.8);
+
+		// wrangler only warns that minify and no_bundle conflict, so the setting must not reach the deploy config
+		const deployConfig = JSON.parse(await fs.readFile(path.join(stagingDir, 'wrangler.json'), 'utf8')) as Record<string, unknown>;
+		expect(deployConfig).not.toHaveProperty('minify');
+	});
+});
+
 describe('resolveWorker', () => {
 	it('applies the Wrangler environment named by CLOUDFLARE_ENV', () => {
 		process.env.CLOUDFLARE_ENV = 'staging';
