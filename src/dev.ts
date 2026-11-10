@@ -49,6 +49,8 @@ interface DevServerHooks {
 const PLUGIN_NAME = 'rspack-plugin-cloudflare';
 // paths the dev server answers itself, before anything reaches the Workers
 const DEV_SERVER_PATH_RE = /^\/(?:webpack-dev-server|__webpack_dev_server__|__open-in-editor|lazy-compilation-using-)/;
+// @rspack/cli turns lazy compilation on for web builds and serves its endpoint after every other middleware
+const LAZY_COMPILATION_PREFIX = '/_rspack/lazy/trigger';
 // Miniflare's own endpoints, like trigger handlers, which belong to the Worker rather than the asset router
 const MINIFLARE_PATH_RE = /^\/(?:cdn-cgi\/local|__cf_local)\//;
 // pre-v5 Miniflare paths still in docs and scripts, mapped the same way the Vite plugin does
@@ -69,6 +71,15 @@ function rewriteLegacyMiniflarePath(pathname: string) {
 		}
 	}
 	return pathname;
+}
+
+// read per request, since @rspack/cli only enables lazy compilation once the dev server starts
+function getLazyCompilationPrefix(compiler: Compiler) {
+	const { lazyCompilation } = compiler.options;
+	if (typeof lazyCompilation === 'object' && lazyCompilation.prefix) {
+		return lazyCompilation.prefix;
+	}
+	return LAZY_COMPILATION_PREFIX;
 }
 
 /** Runs the entry Worker and any auxiliary Workers in one Miniflare, routing dev server requests like Cloudflare does. */
@@ -480,7 +491,7 @@ export class DevSession {
 	/** Connect middleware that sends each request through Cloudflare's router Worker, or straight to the Worker without assets. */
 	async handle(req: IncomingMessage, res: ServerResponse, next: () => void) {
 		const url = getRequestUrl(req);
-		if (DEV_SERVER_PATH_RE.test(url.pathname)) {
+		if (DEV_SERVER_PATH_RE.test(url.pathname) || url.pathname.startsWith(getLazyCompilationPrefix(this.#compiler))) {
 			next();
 			return;
 		}
