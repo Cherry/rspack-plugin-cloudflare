@@ -14,6 +14,10 @@ updates:
       - dependency-name: unenv
       - dependency-name: '@cloudflare/unenv-preset'
       - dependency-name: '@cloudflare/containers-shared'
+      - dependency-name: toucan-js
+      # typescript-eslint and @nodecraft/eslint-config don't support TypeScript 7 yet
+      - dependency-name: typescript
+        versions: ['>=7']
     groups:
       rspack:
         patterns:

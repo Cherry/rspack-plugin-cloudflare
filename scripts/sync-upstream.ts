@@ -6,6 +6,7 @@ import fs from 'node:fs';
 interface PackageJson {
 	version: string;
 	dependencies: Record<string, string>;
+	devDependencies: Record<string, string>;
 }
 
 function run(command: string, args: string[]) {
@@ -27,6 +28,7 @@ run('git', ['-C', 'workers-sdk', 'fetch', '--depth', '1', 'origin', `refs/tags/$
 run('git', ['-C', 'workers-sdk', 'checkout', '--detach', tag]);
 
 const containersShared = readPackage('workers-sdk/packages/containers-shared/package.json');
+const workersShared = readPackage('workers-sdk/packages/workers-shared/package.json');
 run('npm', [
 	'install',
 	'--save-exact',
@@ -35,6 +37,8 @@ run('npm', [
 	`@cloudflare/unenv-preset@${wrangler.dependencies['@cloudflare/unenv-preset']}`,
 	`@cloudflare/containers-shared@${containersShared.version}`,
 ]);
+// bundled into the internal Workers with workers-shared, so it stays on the version workers-shared builds with
+run('npm', ['install', '--save-exact', '--save-dev', `toucan-js@${workersShared.devDependencies['toucan-js']}`]);
 
 if (process.env.GITHUB_OUTPUT) {
 	fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${wrangler.version}\n`);
