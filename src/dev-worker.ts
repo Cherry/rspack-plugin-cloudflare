@@ -2,9 +2,10 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import * as miniflare from 'miniflare';
 import { maybeStartOrUpdateRemoteProxySession, unstable_convertConfigBindingsToStartWorkerBindings, unstable_getMiniflareWorkerOptions } from 'wrangler';
 
-import { getContainerImages } from './containers.js';
+import { generateContainerBuildId, getContainerOptions } from './containers.js';
 import {
 	HMR_HEADER,
 	HMR_RUNNER_CLASS,
@@ -12,9 +13,9 @@ import {
 	createDevEntrySource,
 	getConfiguredExports,
 } from './dev-entry.js';
-import { miniflare } from './miniflare.js';
 import { IMPORTED_ASSETS_DIR, createWorkerConfig } from './worker-config.js';
 
+import type { AssetWorkerOptions } from './assets.js';
 import type { ResolvedWorker } from './config.js';
 import type { CloudflarePluginOptions } from './options.js';
 import type { AdditionalModulesPlugin, VirtualModules } from './worker-config.js';
@@ -179,7 +180,7 @@ export class DevWorker {
 
 	start() {
 		const { main } = this.#resolved;
-		this.#containerBuildId = randomUUID().slice(0, 8);
+		this.#containerBuildId = generateContainerBuildId();
 		if (!main) {
 			this.building = false;
 			return;
@@ -257,19 +258,29 @@ export class DevWorker {
 		return path.join(this.#outputDir, IMPORTED_ASSETS_DIR);
 	}
 
-	/** This Worker's Miniflare options, any external Workers wrangler adds for its bindings, and the container images it needs. */
+	/**
+	 * This Worker's Miniflare options, any external Workers wrangler adds for its bindings, the container images it needs,
+	 * and its asset options, which configure the router and asset Workers the session runs.
+	 */
 	async getMiniflareOptions(extraServiceBindings: Record<string, unknown>, inspectorEnabled: boolean) {
 		const { config, environment } = this.#resolved;
 		const remoteProxyConnectionString = await this.#getRemoteProxyConnectionString();
-		const { workerOptions, externalWorkers } = unstable_getMiniflareWorkerOptions({ ...config, assets: undefined }, environment, {
+		const { workerOptions, externalWorkers } = unstable_getMiniflareWorkerOptions(config, environment, {
 			remoteProxyConnectionString,
 			containerBuildId: this.#containerBuildId,
 		});
-		const { modulesRules: _modulesRules, ...options } = workerOptions;
+		// assets are left out of the Worker because the session runs the router and asset Workers itself
+		const { modulesRules: _modulesRules, assets, ...options } = workerOptions;
 		const containersEnabled = Boolean(config.containers?.length) && config.dev.enable_containers;
+		let assetWorkerOptions: AssetWorkerOptions | undefined;
+		if (assets) {
+			const { routerConfig, assetConfig } = assets as AssetWorkerOptions;
+			assetWorkerOptions = { routerConfig, assetConfig };
+		}
 		return {
+			assetWorkerOptions,
 			externalWorkers,
-			containerImages: containersEnabled ? getContainerImages(config, options.durableObjects) : [],
+			containerOptions: containersEnabled ? getContainerOptions(config, this.#containerBuildId) : [],
 			worker: {
 				...options,
 				name: this.name,

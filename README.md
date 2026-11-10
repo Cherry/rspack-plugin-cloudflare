@@ -58,11 +58,11 @@ Set `CLOUDFLARE_ENV` to pick a Wrangler environment for dev and build, as with t
 
 ## How dev works
 
-Requests hit the rspack dev server first. A middleware in front of `dev-middleware` routes each one the way Cloudflare's router does:
+Requests hit the rspack dev server first. A middleware in front of `dev-middleware` passes each one to Cloudflare's router and asset Workers, built from the same release of Cloudflare's code as `wrangler dev` runs:
 
-- `assets.run_worker_first` rules decide whether the Worker sees a request before assets, with `!/` rules always going to assets.
-- Assets come from the client compiler's in-memory output, falling back to the assets directory on disk, with `html_handling` and `not_found_handling` applied.
-- The Worker's `ASSETS` binding reads from the same place, so it sees dev builds too.
+- `assets.run_worker_first`, `html_handling`, `not_found_handling`, `_headers` and `_redirects` behave as they do when deployed. Editing `_headers` or `_redirects` restarts the Workers to apply it.
+- Assets come from the client compiler's in-memory output, falling back to the assets directory on disk, so they're always the latest build. Their `ETag` and `Cache-Control` headers are dropped, so the browser never reuses a stale dev file.
+- The Worker's `ASSETS` binding goes to the same asset Worker, so it sees dev builds too.
 - WebSocket upgrades go to the Worker, except the dev server's own HMR socket.
 - `/cdn-cgi/local/scheduled` and the other Miniflare trigger endpoints (and their older `/cdn-cgi/handler/*` paths) reach the Worker directly.
 - `/__debug` opens DevTools for every Worker.
@@ -105,7 +105,7 @@ Files are named `assets/<name>.<hash><ext>`. Dev serves them alongside the clien
 
 ### Containers
 
-Container-backed Durable Objects run locally like `wrangler dev`: dev builds each Dockerfile (or pulls each registry image) before starting the Workers, then removes the containers when it exits. It needs a running Docker daemon, and like wrangler it doesn't support Windows outside WSL. Set `dev.enable_containers` to `false` in the Wrangler config to skip it. Images are built once per dev session, so restart dev after changing a Dockerfile.
+Container-backed Durable Objects run locally like `wrangler dev`, using the same Cloudflare packages as wrangler and the Vite plugin: dev builds each Dockerfile (or pulls each registry image) before starting the Workers, then removes the containers when it exits. It needs a running Docker daemon, and like wrangler it doesn't support Windows outside WSL. Set `dev.enable_containers` to `false` in the Wrangler config to skip it. Images are built once per dev session, so restart dev after changing a Dockerfile.
 
 ### Sharing with a tunnel
 
@@ -116,11 +116,14 @@ Anyone with the URL reaches the dev server, including the Worker's local binding
 ## Contributing
 
 ```sh
+git submodule update --init
 npm ci
 node --run test
 ```
 
 `node --run test` lints, type checks, builds and runs the test suite, which starts real `rspack serve` and `rspack build` runs against the fixtures in `test/fixtures`.
+
+Cloudflare's router and asset Workers and their `_headers` and `_redirects` parsers come from `@cloudflare/workers-shared`, which isn't published. The `workers-sdk` submodule is pinned to the commit of the wrangler release we depend on, and `node --run build` bundles that code into `dist`. The weekly Sync upstream workflow moves wrangler, Miniflare, the packages wrangler pins and the submodule to the latest wrangler release together, runs the tests and opens a pull request. To do the same locally, run `node scripts/sync-upstream.ts [version]`.
 
 Releases are automated. Merging to `main` runs [semantic-release](https://github.com/semantic-release/semantic-release), which picks the version from the [conventional commit](https://www.conventionalcommits.org/) titles since the last release and publishes to npm through trusted publishing, with provenance. Pull requests are squash merged, so the pull request title is the commit that counts.
 
