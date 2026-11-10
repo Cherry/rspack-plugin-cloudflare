@@ -23,6 +23,7 @@
 	],
 	"env": {
 		"staging": {
+			"minify": true,
 			"vars": {
 				"GREETING": "howdy"
 			},

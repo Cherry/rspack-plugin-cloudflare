@@ -22,6 +22,7 @@ const OMITTED_CONFIG_KEYS = new Set([
 	'alias',
 	'tsconfig',
 	'find_additional_modules',
+	'minify',
 	'base_dir',
 	'preserve_file_names',
 ]);

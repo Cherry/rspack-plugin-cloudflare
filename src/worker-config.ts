@@ -215,8 +215,8 @@ export function createWorkerConfig(options: {
 		},
 		devtool: 'source-map',
 		optimization: {
-			// wrangler doesn't minify by default either, and readable stack traces matter more on the server
-			minimize: false,
+			// follows wrangler's `minify`, since deploy can't minify an already bundled Worker; dev stays readable for debugging and HMR
+			minimize: Boolean(worker.config.minify) && !hot,
 			// a failed dev build must leave the last good bundle in place, since restarting another Worker reloads it from disk
 			emitOnErrors: false,
 		},

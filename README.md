@@ -41,6 +41,8 @@ The Worker is configured in your existing `wrangler.toml` / `wrangler.json(c)`, 
 
 Set `CLOUDFLARE_ENV` to pick a Wrangler environment for dev and build, as with the Vite plugin.
 
+`minify = true` in the Wrangler config minifies the Worker in `rspack build`, since `wrangler deploy` no longer bundles it. Dev stays unminified, and source maps are uploaded either way unless `upload_source_maps = false`.
+
 ### Options
 
 | Option | Default | |
