@@ -3,11 +3,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import * as miniflare from 'miniflare';
-import { lookup } from 'mrmime';
 
 import { constructHeaders, constructRedirects } from '../workers-sdk/packages/workers-shared/utils/configuration/constructConfiguration.js';
 import { parseHeaders } from '../workers-sdk/packages/workers-shared/utils/configuration/parseHeaders.js';
 import { parseRedirects } from '../workers-sdk/packages/workers-shared/utils/configuration/parseRedirects.js';
+import { getContentType } from '../workers-sdk/packages/workers-shared/utils/helpers.js';
 
 import type { AssetConfig, RouterConfig } from '../workers-sdk/packages/workers-shared/utils/types.js';
 import type { Compiler } from '@rspack/core';
@@ -130,7 +130,8 @@ export class DevAssets {
 			return new miniflare.Response(null, { status: 404 });
 		}
 		const body = await readFile(file.fileSystem, file.filePath);
-		return new miniflare.Response(body, { headers: { 'Content-Type': lookup(file.filePath) ?? 'application/octet-stream' } });
+		// the content types wrangler gives assets when it uploads them
+		return new miniflare.Response(body, { headers: { 'Content-Type': getContentType(file.filePath) ?? 'application/octet-stream' } });
 	}
 }
 

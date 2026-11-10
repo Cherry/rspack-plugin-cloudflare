@@ -37,8 +37,9 @@ run('npm', [
 	`@cloudflare/unenv-preset@${wrangler.dependencies['@cloudflare/unenv-preset']}`,
 	`@cloudflare/containers-shared@${containersShared.version}`,
 ]);
-// bundled into the internal Workers with workers-shared, so it stays on the version workers-shared builds with
-run('npm', ['install', '--save-exact', '--save-dev', `toucan-js@${workersShared.devDependencies['toucan-js']}`]);
+// bundled into dist with workers-shared, so they stay on the versions workers-shared builds with
+const bundled = ['toucan-js', 'mime', 'ignore'].map(name => `${name}@${workersShared.devDependencies[name]}`);
+run('npm', ['install', '--save-exact', '--save-dev', ...bundled]);
 
 if (process.env.GITHUB_OUTPUT) {
 	fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${wrangler.version}\n`);
