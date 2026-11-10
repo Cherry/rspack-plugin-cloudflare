@@ -73,6 +73,14 @@ function rewriteLegacyMiniflarePath(pathname: string) {
 
 /** Runs the entry Worker and any auxiliary Workers in one Miniflare, routing dev server requests like Cloudflare does. */
 export class DevSession {
+	/** Reads every Worker's config before the session starts, since `cloudflare.config.ts` can only be loaded asynchronously. */
+	static async create(options: { compiler: Compiler; resolvers: (() => Promise<ResolvedWorker>)[]; pluginOptions: CloudflarePluginOptions; logger: Logger; }) {
+		const workers = await Promise.all(options.resolvers.map(async (resolve) => {
+			return { resolve, resolved: await resolve() };
+		}));
+		return new DevSession({ ...options, workers });
+	}
+
 	readonly #compiler: Compiler;
 	readonly #options: CloudflarePluginOptions;
 	readonly #logger: Logger;
@@ -82,7 +90,8 @@ export class DevSession {
 	#assets: DevAssets | undefined;
 	#miniflare: InstanceType<typeof miniflare.Miniflare> | undefined;
 	#inspectorPort: number | undefined;
-	#configWatchers: FSWatcher[] = [];
+	readonly #configWatchers = new Map<string, FSWatcher>();
+	readonly #pendingReloads = new Map<DevWorker, ReturnType<typeof setTimeout>>();
 	// images already built this session, which are also the ones whose containers need removing on exit
 	readonly #containerTags = new Set<string>();
 	readonly #removeContainersOnExit = () => removeContainers(getDockerPath(), this.#containerTags);
@@ -96,12 +105,13 @@ export class DevSession {
 	// the `_headers` and `_redirects` Miniflare last started the asset Worker with
 	#assetRules: AssetRules | undefined;
 
-	constructor(options: { compiler: Compiler; resolvers: (() => ResolvedWorker)[]; pluginOptions: CloudflarePluginOptions; logger: Logger; }) {
+	private constructor(options: { compiler: Compiler; workers: { resolved: ResolvedWorker; resolve: () => Promise<ResolvedWorker>; }[]; pluginOptions: CloudflarePluginOptions; logger: Logger; }) {
 		this.#compiler = options.compiler;
 		this.#options = options.pluginOptions;
 		this.#logger = options.logger;
-		this.#workers = options.resolvers.map(resolve => new DevWorker({
+		this.#workers = options.workers.map(({ resolved, resolve }) => new DevWorker({
 			compiler: options.compiler,
+			resolved,
 			resolve,
 			pluginOptions: options.pluginOptions,
 			logger: options.logger,
@@ -362,42 +372,56 @@ export class DevSession {
 		});
 	}
 
-	/** Rebuilds a Worker when its Wrangler config or local secrets change, like the Vite plugin restarting its server. */
+	/** Rebuilds a Worker when its config, a file its config imports, or its local secrets change, like the Vite plugin restarting its server. */
 	#watchConfigs() {
-		const pending = new Map<DevWorker, ReturnType<typeof setTimeout>>();
-		const reload = (worker: DevWorker) => {
-			clearTimeout(pending.get(worker));
-			// editors often write a file in several steps, so wait for them to settle
-			pending.set(worker, setTimeout(() => {
-				pending.delete(worker);
-				this.#reloadWorker(worker).catch((error: unknown) => {
-					this.#logger.error(`Worker "${worker.name}" failed to reload its config:\n${String(error)}`);
-				});
-			}, 100));
-		};
-		const directories = new Set(this.#workers.map(worker => worker.resolved.rootDir));
-		for (const directory of directories) {
-			this.#configWatchers.push(fs.watch(directory, (_event, fileName) => {
-				if (!fileName) {
-					return;
+		for (const worker of this.#workers) {
+			const { configFiles, rootDir } = worker.resolved;
+			for (const directory of [rootDir, ...configFiles.map(file => path.dirname(file))]) {
+				if (!this.#configWatchers.has(directory)) {
+					this.#configWatchers.set(directory, fs.watch(directory, (_event, fileName) => this.#onConfigDirectoryChange(directory, fileName)));
 				}
-				for (const worker of this.#workers) {
-					const { configPath, rootDir } = worker.resolved;
-					if (rootDir === directory && (fileName === path.basename(configPath) || SECRETS_FILE_RE.test(fileName))) {
-						reload(worker);
-					}
-				}
-			}));
+			}
 		}
+	}
+
+	#onConfigDirectoryChange(directory: string, fileName: string | null) {
+		if (!fileName) {
+			return;
+		}
+		const filePath = path.join(directory, fileName);
+		for (const worker of this.#workers) {
+			const { configFiles, rootDir } = worker.resolved;
+			if (configFiles.includes(filePath) || (rootDir === directory && SECRETS_FILE_RE.test(fileName))) {
+				this.#scheduleReload(worker);
+			}
+		}
+	}
+
+	#scheduleReload(worker: DevWorker) {
+		clearTimeout(this.#pendingReloads.get(worker));
+		// editors often write a file in several steps, so wait for them to settle
+		this.#pendingReloads.set(worker, setTimeout(() => {
+			this.#pendingReloads.delete(worker);
+			this.#reloadWorker(worker).catch((error: unknown) => {
+				this.#logger.error(`Worker "${worker.name}" failed to reload its config:\n${String(error)}`);
+			});
+		}, 100));
 	}
 
 	async #reloadWorker(worker: DevWorker) {
 		this.#logger.info(`Worker "${worker.name}" config changed; rebuilding`);
 		this.#openGate();
-		await worker.reload();
-		if (worker === this.#entry) {
-			this.#assets = this.#createDevAssets();
+		try {
+			await worker.reload();
+			if (worker === this.#entry) {
+				this.#assets = this.#createDevAssets();
+			}
+		} finally {
+			// a config that fails to load keeps the previous build serving, so requests can't be left waiting for a rebuild
+			this.#releaseGateIfIdle();
 		}
+		// the new config can import files from directories nobody is watching yet
+		this.#watchConfigs();
 	}
 
 	async #upgrade(webSocketServer: WebSocketServer, url: URL, req: IncomingMessage, socket: Duplex, head: Buffer) {
@@ -504,9 +528,17 @@ export class DevSession {
 		});
 	}
 
+	/** The entry Worker as its config was last read. */
+	get entry() {
+		return this.#entry.resolved;
+	}
+
 	async dispose() {
-		for (const watcher of this.#configWatchers) {
+		for (const watcher of this.#configWatchers.values()) {
 			watcher.close();
+		}
+		for (const timeout of this.#pendingReloads.values()) {
+			clearTimeout(timeout);
 		}
 		await Promise.all(this.#workers.map(worker => worker.dispose()));
 		await this.#miniflare?.dispose();

@@ -36,7 +36,7 @@
 	],
 	"scripts": {
 		"build": "tsdown",
-		"check-types": "tsc -p tsconfig.json && tsc -p src/workers/tsconfig.json && tsc -p test/fixtures/basic/worker/tsconfig.json && tsc -p test/fixtures/legacy-compat/worker/tsconfig.json && tsc -p test/fixtures/multi-worker/tsconfig.json",
+		"check-types": "tsc -p tsconfig.json && tsc -p src/workers/tsconfig.json && tsc -p test/fixtures/basic/worker/tsconfig.json && tsc -p test/fixtures/legacy-compat/worker/tsconfig.json && tsc -p test/fixtures/multi-worker/tsconfig.json && tsc -p test/fixtures/cloudflare-config/tsconfig.json",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
 		"prepack": "node --run build",
@@ -75,8 +75,10 @@
 		"vitest": "5.1.0"
 	},
 	"dependencies": {
+		"@cloudflare/config": "0.30.0",
 		"@cloudflare/containers-shared": "0.23.7",
 		"@cloudflare/unenv-preset": "2.16.2",
+		"@cloudflare/workers-utils": "0.51.0",
 		"miniflare": "5.20261102.0-beta",
 		"unenv": "2.0.0-rc.24",
 		"wrangler": "4.156.2",

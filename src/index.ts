@@ -67,11 +67,12 @@ export class CloudflarePlugin implements RspackPluginInstance {
 		this.options = options;
 	}
 
-	async #openTunnel(server: RspackDevServer, entry: ResolvedWorker | undefined, logger: ReturnType<Compiler['getInfrastructureLogger']>) {
+	async #openTunnel(server: RspackDevServer, session: Promise<DevSession> | undefined, logger: ReturnType<Compiler['getInfrastructureLogger']>) {
 		const { tunnel: tunnelOption } = this.options;
-		if (!entry || !tunnelOption) {
+		if (!session || !tunnelOption) {
 			return;
 		}
+		const { entry } = await session;
 		logger.warn('Starting a Cloudflare Tunnel: anyone with its URL can reach this dev server and its Worker\'s local bindings.');
 		this.#tunnel = await startTunnel({
 			origin: getDevServerOrigin(server),
@@ -88,8 +89,8 @@ export class CloudflarePlugin implements RspackPluginInstance {
 	apply(compiler: Compiler) {
 		type DevServerOptions = NonNullable<RspackDevServer['options']>;
 		const logger = compiler.getInfrastructureLogger(PLUGIN_NAME);
-		const resolvers = getWorkerResolvers(compiler.context, this.options);
-		let session: DevSession | undefined;
+		const resolvers = getWorkerResolvers(compiler.context, this.options, compiler.options.output.path);
+		let session: Promise<DevSession> | undefined;
 
 		// `rspack serve` builds the dev server from these options after plugins apply, so wrapping them here hooks us in
 		const devServer = compiler.options.devServer as DevServerOptions | undefined;
@@ -98,38 +99,45 @@ export class CloudflarePlugin implements RspackPluginInstance {
 			const { setupMiddlewares, onListening } = devServer;
 			devServer.setupMiddlewares = (middlewares: Middlewares, server: RspackDevServer) => {
 				const result = setupMiddlewares ? setupMiddlewares(middlewares, server) : middlewares;
-				session = new DevSession({ compiler, resolvers, pluginOptions: this.options, logger });
-				session.start({
-					waitUntilValid: () => new Promise((resolve) => {
-						if (server.middleware) {
-							server.middleware.waitUntilValid(() => resolve());
-						} else {
-							resolve();
-						}
-					}),
-					sendToClients: (type, data) => {
-						if (server.webSocketServer) {
-							server.sendMessage(server.webSocketServer.clients, type, data);
-						}
-					},
+				const activeSession = DevSession.create({ compiler, resolvers, pluginOptions: this.options, logger }).then((created) => {
+					created.start({
+						waitUntilValid: () => new Promise((resolve) => {
+							if (server.middleware) {
+								server.middleware.waitUntilValid(() => resolve());
+							} else {
+								resolve();
+							}
+						}),
+						sendToClients: (type, data) => {
+							if (server.webSocketServer) {
+								server.sendMessage(server.webSocketServer.clients, type, data);
+							}
+						},
+					});
+					return created;
 				});
-				const activeSession = session;
+				activeSession.catch((error: unknown) => {
+					logger.error(`Workers failed to start:\n${String(error)}`);
+				});
+				session = activeSession;
 				// ahead of dev-middleware so `run_worker_first` decides who answers, not whatever the client build emitted
 				const devMiddlewareIndex = result.findIndex(middleware => typeof middleware === 'object' && middleware.name === '@rspack/dev-middleware');
 				result.splice(devMiddlewareIndex === -1 ? result.length : devMiddlewareIndex, 0, {
 					name: PLUGIN_NAME,
-					middleware: (req: IncomingMessage, res: ServerResponse, next: () => void) => {
-						activeSession.handle(req, res, next).catch(next);
+					middleware: (req: IncomingMessage, res: ServerResponse, next: (error?: unknown) => void) => {
+						activeSession.then(created => created.handle(req, res, next)).catch(next);
 					},
 				});
 				return result;
 			};
 			devServer.onListening = (server: RspackDevServer) => {
-				if (session && server.server) {
-					session.attachUpgradeHandler(server.server as Server, getSocketPath(server));
+				const httpServer = server.server;
+				if (session && httpServer) {
+					// a session that failed to start has already been logged, and leaves nothing to forward upgrades to
+					session.then(created => created.attachUpgradeHandler(httpServer as Server, getSocketPath(server))).catch(() => {});
 				}
 				if (this.options.tunnel) {
-					this.#openTunnel(server, resolvers[0]?.(), logger).catch((error: unknown) => {
+					this.#openTunnel(server, session, logger).catch((error: unknown) => {
 						logger.error(`Tunnel failed to start: ${error instanceof Error ? error.message : String(error)}`);
 					});
 				}
@@ -140,7 +148,7 @@ export class CloudflarePlugin implements RspackPluginInstance {
 		// the Workers `rspack build` bundled, whose imported assets join the client output once it has emitted
 		let builtWorkers: ResolvedWorker[] | undefined;
 		compiler.hooks.beforeRun.tapPromise(PLUGIN_NAME, async () => {
-			const workers = resolvers.map(resolve => resolve());
+			const workers = await Promise.all(resolvers.map(resolve => resolve()));
 			await buildWorkers({ compiler, workers, pluginOptions: this.options });
 			for (const worker of workers) {
 				logger.info(`Built ${worker.main ? 'Worker' : 'assets-only config'} "${worker.name}" into ${worker.outputDir}`);
@@ -154,7 +162,8 @@ export class CloudflarePlugin implements RspackPluginInstance {
 		});
 		compiler.hooks.shutdown.tapPromise(PLUGIN_NAME, async () => {
 			this.#tunnel?.close();
-			await session?.dispose();
+			const created = await session?.catch(() => {});
+			await created?.dispose();
 		});
 	}
 }

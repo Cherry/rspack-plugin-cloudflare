@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 export const basicFixture = path.resolve(import.meta.dirname, 'fixtures/basic');
 export const assetsOnlyFixture = path.resolve(import.meta.dirname, 'fixtures/assets-only');
+export const cloudflareConfigFixture = path.resolve(import.meta.dirname, 'fixtures/cloudflare-config');
 // both CLIs keep their bin out of package exports, so point at the files directly
 const nodeModules = path.resolve(import.meta.dirname, '../node_modules');
 export const rspackBin = path.join(nodeModules, '@rspack/cli/bin/rspack.js');
