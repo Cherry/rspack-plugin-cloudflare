@@ -21,7 +21,8 @@ function readPackage(file: string) {
 const target = process.argv[2] ?? 'latest';
 // npm honours min-release-age in .npmrc, so this never picks a release younger than the rest of the dependencies may be
 // wrangler is a peer dependency, so this only moves the version tests run against, not the range users can install
-run('npm', ['install', '--save-exact', '--save-dev', `wrangler@${target}`]);
+// workers-types moves with it because wrangler raises its workers-types peer floor, which fails the install otherwise
+run('npm', ['install', '--save-exact', '--save-dev', `wrangler@${target}`, '@cloudflare/workers-types@latest']);
 const wrangler = readPackage('node_modules/wrangler/package.json');
 
 const tag = `wrangler@${wrangler.version}`;
