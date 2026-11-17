@@ -6,11 +6,8 @@ import type { WorkerConfig } from './options.js';
 import type { ContainerDevOptions, ViteLogger } from '@cloudflare/containers-shared';
 
 export { generateContainerBuildId } from '@cloudflare/containers-shared';
-
-/** `WRANGLER_DOCKER_BIN`, like wrangler, so both find the same Docker. */
-export function getDockerPath() {
-	return process.env.WRANGLER_DOCKER_BIN || 'docker';
-}
+// reads `WRANGLER_DOCKER_BIN` like wrangler, so both find the same Docker
+export { getDockerPath } from '@cloudflare/workers-utils/docker-path';
 
 /** The images a Worker's Containers need, tagged to match the Durable Object options wrangler generates with the same build id. */
 export function getContainerOptions(config: WorkerConfig, containerBuildId: string): ContainerDevOptions[] {

@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import { PATH_TO_DEPLOY_CONFIG } from '@cloudflare/workers-utils';
 import { unstable_getVarsForDev } from 'wrangler';
 
 import { IMPORTED_ASSETS_DIR, createWorkerConfig } from './worker-config.js';
@@ -139,7 +140,7 @@ export async function buildWorkers(options: { compiler: Compiler; workers: Resol
 	}
 
 	// the same redirect @cloudflare/vite-plugin writes, so a plain `wrangler deploy` next to the user config deploys the build
-	const deployConfigPath = path.join(entry.rootDir, '.wrangler', 'deploy', 'config.json');
+	const deployConfigPath = path.join(entry.rootDir, PATH_TO_DEPLOY_CONFIG);
 	const relativeToDeploy = (filePath: string) => path.relative(path.dirname(deployConfigPath), filePath).replaceAll('\\', '/');
 	const [entryConfigPath, ...auxiliaryConfigPaths] = configPaths;
 	await fs.mkdir(path.dirname(deployConfigPath), { recursive: true });
