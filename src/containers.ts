@@ -1,11 +1,6 @@
 import path from 'node:path';
 
-import {
-	cleanupContainers,
-	createContainerDevPlan,
-	prepareContainerImagesForDev,
-	resolveDockerHost,
-} from '@cloudflare/containers-shared';
+import { createContainerDevPlan, prepareContainerImagesForDev, resolveDockerHost } from '@cloudflare/containers-shared';
 
 import type { WorkerConfig } from './options.js';
 import type { ContainerDevOptions, ViteLogger } from '@cloudflare/containers-shared';
@@ -46,11 +41,4 @@ export async function prepareContainerImages(options: { config: WorkerConfig; do
 		configFileName: path.basename(config.configPath ?? 'wrangler.json'),
 		registryConfigureCommand: 'wrangler containers registries configure',
 	});
-}
-
-/** Force-removes containers started from these images; synchronous so it can also run while the process exits. */
-export function removeContainers(dockerPath: string, tags: Set<string>) {
-	if (tags.size > 0) {
-		cleanupContainers(dockerPath, tags);
-	}
 }

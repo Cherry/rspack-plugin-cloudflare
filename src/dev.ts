@@ -11,12 +11,7 @@ import {
 	getAssetConfig,
 	getAssetWorkers,
 } from './assets.js';
-import {
-	getContainerEngine,
-	getDockerPath,
-	prepareContainerImages,
-	removeContainers,
-} from './containers.js';
+import { getContainerEngine, getDockerPath, prepareContainerImages } from './containers.js';
 import { DevWorker } from './dev-worker.js';
 import {
 	createRequestInit,
@@ -103,9 +98,8 @@ export class DevSession {
 	#inspectorPort: number | undefined;
 	readonly #configWatchers = new Map<string, FSWatcher>();
 	readonly #pendingReloads = new Map<DevWorker, ReturnType<typeof setTimeout>>();
-	// images already built this session, which are also the ones whose containers need removing on exit
+	// images already built this session, so reloads don't rebuild them
 	readonly #containerTags = new Set<string>();
-	readonly #removeContainersOnExit = () => removeContainers(getDockerPath(), this.#containerTags);
 	// Workers rebuilt since Miniflare last picked up their code, and those whose build is failing
 	readonly #updated = new Set<DevWorker>();
 	readonly #failing = new Set<DevWorker>();
@@ -288,9 +282,6 @@ export class DevSession {
 					this.#containerTags.add(options.image_tag);
 				}
 			}
-			// rspack serve may exit without a shutdown hook, like on a crash, and containers would keep running
-			process.off('exit', this.#removeContainersOnExit);
-			process.on('exit', this.#removeContainersOnExit);
 			this.#logger.info('Container images built; restart dev to rebuild them after changing a Dockerfile.');
 		}
 		return getContainerEngine(first.config, dockerPath);
@@ -554,7 +545,5 @@ export class DevSession {
 		await Promise.all(this.#workers.map(worker => worker.dispose()));
 		await this.#miniflare?.dispose();
 		this.#miniflare = undefined;
-		this.#removeContainersOnExit();
-		process.off('exit', this.#removeContainersOnExit);
 	}
 }
