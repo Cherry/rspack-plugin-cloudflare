@@ -67,20 +67,20 @@
 		"globals": "17.14.0",
 		"ignore": "5.3.2",
 		"mime": "4.1.2",
-		"miniflare": "5.20261109.0-beta",
+		"miniflare": "5.20261110.0-beta",
 		"semantic-release": "25.0.9",
 		"toucan-js": "4.0.0",
 		"tsdown": "0.23.4",
 		"typescript": "6.0.3",
 		"typescript-eslint": "8.72.1",
 		"vitest": "5.1.0",
-		"wrangler": "4.159.0"
+		"wrangler": "4.160.0"
 	},
 	"dependencies": {
-		"@cloudflare/config": "0.31.0",
-		"@cloudflare/containers-shared": "0.24.0",
+		"@cloudflare/config": "0.31.1",
+		"@cloudflare/containers-shared": "0.25.0",
 		"@cloudflare/unenv-preset": "2.16.2",
-		"@cloudflare/workers-utils": "0.52.1",
+		"@cloudflare/workers-utils": "0.53.0",
 		"unenv": "2.0.0-rc.24",
 		"ws": "8.22.1"
 	},
