@@ -35,7 +35,7 @@ export async function prepareContainerImages(options: { config: WorkerConfig; do
 		onContainerImagePreparationEnd: () => {},
 		logger: options.logger,
 		complianceConfig: config,
-		configFileName: path.basename(config.configPath ?? 'wrangler.json'),
+		dockerUnavailableHint: `To suppress this error if you do not intend on triggering any container instances, set dev.enable_containers to false in your ${path.basename(config.configPath ?? 'wrangler.json')}.`,
 		registryConfigureCommand: 'wrangler containers registries configure',
 	});
 }
