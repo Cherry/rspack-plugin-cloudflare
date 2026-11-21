@@ -82,7 +82,7 @@
 		"@cloudflare/unenv-preset": "2.16.2",
 		"@cloudflare/workers-utils": "0.54.0",
 		"unenv": "2.0.0-rc.24",
-		"ws": "8.22.1"
+		"ws": "8.23.0"
 	},
 	"peerDependencies": {
 		"@rspack/core": "^2.0.0",
