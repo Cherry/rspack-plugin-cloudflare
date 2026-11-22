@@ -1,7 +1,7 @@
 name: Sync upstream
 on:
   schedule:
-    # Daily, 06:23 UTC. min-release-age in .npmrc still holds every release back for a week.
+    # Daily, 06:23 UTC. scripts/sync-upstream.ts still holds every release back for 2 days.
     - cron: '23 6 * * *'
   workflow_dispatch:
     inputs:
