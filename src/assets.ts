@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { miniflare } from './miniflare.js';
 import { constructHeaders, constructRedirects } from '../workers-sdk/packages/workers-shared/utils/configuration/constructConfiguration.js';
 import { parseHeaders } from '../workers-sdk/packages/workers-shared/utils/configuration/parseHeaders.js';
 import { parseRedirects } from '../workers-sdk/packages/workers-shared/utils/configuration/parseRedirects.js';
 import { getContentType } from '../workers-sdk/packages/workers-shared/utils/helpers.js';
+import { miniflare } from './miniflare.js';
 
 import type { AssetConfig, RouterConfig } from '../workers-sdk/packages/workers-shared/utils/types.js';
 import type { Compiler } from '@rspack/core';

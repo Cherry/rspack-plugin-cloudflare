@@ -9,14 +9,14 @@ import {
 	it,
 } from 'vitest';
 
+import { createOutputConfig } from '../src/build.js';
+import { resolveWorker } from '../src/config.js';
 import {
 	basicFixture,
 	rspackBin,
 	run,
 	wranglerBin,
 } from './helpers.js';
-import { createOutputConfig } from '../src/build.js';
-import { resolveWorker } from '../src/config.js';
 
 const outputDir = path.join(basicFixture, 'dist/fixture');
 

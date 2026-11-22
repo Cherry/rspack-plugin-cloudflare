@@ -12,6 +12,7 @@ import {
 	it,
 } from 'vitest';
 
+import { resolveWorker } from '../src/config.js';
 import {
 	cloudflareConfigFixture,
 	rspackBin,
@@ -20,7 +21,6 @@ import {
 	waitFor,
 	wranglerBin,
 } from './helpers.js';
-import { resolveWorker } from '../src/config.js';
 
 const greetingPath = path.join(cloudflareConfigFixture, 'greeting.ts');
 const clientOutputPath = path.join(cloudflareConfigFixture, 'build');
