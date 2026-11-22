@@ -35,7 +35,7 @@ jobs:
       # Fails when .github/workflows/actions.lock is missing a dependency or a locked commit is rejected
       - name: Verify actions lockfile
         run: |
-          gh extension install github/gh-actions-lock --pin v0.2.0
+          gh extension install github/gh-actions-lock --pin v0.4.1
           gh actions-lock --verify
         env:
           GH_TOKEN: ${{ github.token }}
