@@ -50,7 +50,7 @@
 		"access": "public"
 	},
 	"devDependencies": {
-		"@cloudflare/workers-types": "5.20261115.1",
+		"@cloudflare/workers-types": "5.20261120.1",
 		"@nodecraft/eslint-config": "54.0.0",
 		"@rspack/cli": "2.3.2",
 		"@rspack/core": "2.3.2",
@@ -67,20 +67,20 @@
 		"globals": "17.14.0",
 		"ignore": "5.3.2",
 		"mime": "4.1.2",
-		"miniflare": "5.20261113.0-beta",
+		"miniflare": "5.20261118.0-beta",
 		"semantic-release": "25.0.9",
 		"toucan-js": "4.0.0",
 		"tsdown": "0.23.7",
 		"typescript": "6.0.3",
 		"typescript-eslint": "8.72.2",
 		"vitest": "5.1.0",
-		"wrangler": "4.162.0"
+		"wrangler": "4.165.0"
 	},
 	"dependencies": {
-		"@cloudflare/config": "0.32.1",
-		"@cloudflare/containers-shared": "0.26.1",
+		"@cloudflare/config": "1.0.0-rc.2",
+		"@cloudflare/containers-shared": "0.27.0",
 		"@cloudflare/unenv-preset": "2.16.2",
-		"@cloudflare/workers-utils": "0.54.0",
+		"@cloudflare/workers-utils": "0.55.0",
 		"unenv": "2.0.0-rc.24",
 		"ws": "8.23.0"
 	},
