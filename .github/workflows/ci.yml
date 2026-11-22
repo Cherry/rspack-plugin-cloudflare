@@ -44,8 +44,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows matters as much as Linux here: the plugin manages processes and paths that differ between them
-        os: [ubuntu-latest, windows-latest]
+        # Every OS matters here: the plugin manages processes, paths and file watching that differ between them
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     name: Test (${{ matrix.os }})
