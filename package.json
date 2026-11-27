@@ -68,7 +68,7 @@
 		"ignore": "5.3.2",
 		"mime": "4.1.2",
 		"miniflare": "5.20261123.1-beta",
-		"semantic-release": "25.0.9",
+		"semantic-release": "26.0.1",
 		"toucan-js": "4.0.0",
 		"tsdown": "0.23.7",
 		"typescript": "6.0.3",
